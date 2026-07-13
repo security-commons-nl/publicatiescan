@@ -130,6 +130,7 @@ def _iter_postcodes(text: str):
             yield m
 _HUISNR_NABIJ_RE = re.compile(r"\b\d{1,4}[a-zA-Z]?\b")
 _PASPOORT_RE = re.compile(r"\b[A-Z]{2}[A-Z0-9]{6}\d\b")
+_POSTBUS_RE = re.compile(r"\bpostbus\b[\s\S]{0,15}$", re.I)
 
 _GEBOORTE_HINT = re.compile(r"geboren|geboortedatum|geb\.?\s|geb\.?dat", re.I)
 _ID_HINT = re.compile(r"paspoort|rijbewijs|identiteits|documentnummer|id[- ]?kaart", re.I)
@@ -207,10 +208,19 @@ def _find_naw(text, loc, out):
         # Kijk dus beide kanten op, anders mis je het gangbaarste adresformaat.
         voor = text[max(0, m.start() - 40):m.start()]
         na = text[m.end():min(len(text), m.end() + 25)]
-        if _HUISNR_NABIJ_RE.search(voor) or _HUISNR_NABIJ_RE.search(na):
-            out.append(Finding("NAW (postcode+huisnr)", MIDDEL, m.group(0), loc,
+        if not (_HUISNR_NABIJ_RE.search(voor) or _HUISNR_NABIJ_RE.search(na)):
+            continue
+        # "Postbus 9100, 2300 PC Leiden" is het postadres van een organisatie, geen
+        # woonadres. Het staat in de bezwaarclausule van élke bekendmaking en zou
+        # anders de triage-lijst vullen met het adres van de afzender zelf.
+        if _POSTBUS_RE.search(voor):
+            out.append(Finding("NAW (postcode+huisnr)", LAAG, m.group(0), loc,
                                _snippet(text, m.start(), m.end(), m.group(0)),
-                               "postcode met huisnummer in de buurt"))
+                               "postbusadres van een organisatie, geen woonadres"))
+            continue
+        out.append(Finding("NAW (postcode+huisnr)", MIDDEL, m.group(0), loc,
+                           _snippet(text, m.start(), m.end(), m.group(0)),
+                           "postcode met huisnummer in de buurt"))
 
 
 def _find_paspoort(text, loc, out):

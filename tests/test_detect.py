@@ -78,6 +78,30 @@ def test_postcode_zonder_huisnummer_geen_naw():
     assert waarden("De gemeente ligt in gebied 2333 CT", "naw", "NAW") == []
 
 
+# Een postbus is het postadres van een organisatie, geen woonadres. Hij staat in de
+# bezwaarclausule van élke bekendmaking; op Middel vult hij de triage-lijst met het
+# adres van de afzender zelf. Deze drie zinnen komen letterlijk uit gepubliceerde
+# bekendmakingen.
+@pytest.mark.parametrize("tekst", [
+    "Een bezwaarschrift kunt u sturen naar: Postbus 9100, 2300 PC in Leiden.",
+    "schriftelijk indienen naar Postbus 9100, 2300 PC te Leiden onder vermelding van",
+    "Omgevingsdienst West-Holland Postbus 159, 2300 AD LEIDEN",
+])
+def test_postbus_is_geen_woonadres(tekst):
+    treffers = [f for f in soorten(tekst, "naw") if f.soort.startswith("NAW")]
+    assert treffers, "de postcode moet nog wel gevonden worden"
+    assert all(f.ernst == LAAG for f in treffers)
+    assert all("postbus" in f.opmerking.lower() for f in treffers)
+
+
+def test_woonadres_blijft_middel_naast_een_postbus():
+    tekst = ("Het perceel Hoofdstraat 12, 2351 AB Leiderdorp. "
+             "Bezwaar: Postbus 9100, 2300 PC Leiden.")
+    per_waarde = {f.waarde: f.ernst for f in soorten(tekst, "naw") if f.soort.startswith("NAW")}
+    assert per_waarde["2351 AB"] == MIDDEL      # het echte adres blijft staan
+    assert per_waarde["2300 PC"] == LAAG        # de postbus zakt weg
+
+
 # ---------------------------------------------------------------------------
 # E-mail — eigen domein is een werkadres, geen lek
 # ---------------------------------------------------------------------------
