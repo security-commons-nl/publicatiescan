@@ -16,9 +16,15 @@
 # medewerker — geen datalek — en krijgt daarom ernst 'Laag'. Laat je dit leeg, dan
 # komt elk gevonden e-mailadres als 'Middel' in het rapport en verzuip je in ruis.
 # Subdomeinen tellen automatisch mee.
+#
+# Vergeet je gemeenschappelijke regelingen niet: de omgevingsdienst, de veiligheids-
+# regio en je shared-service-organisatie staan standaard in je bekendmakingssjablonen
+# ("bezwaar kan via info@..."). Zet je die er niet bij, dan levert elke vergunning een
+# vals-positief op.
 eigen_domeinen:
   # - jouwgemeente.nl
-  # - jouwsamenwerkingsverband.nl
+  # - jouwomgevingsdienst.nl
+  # - jouwshared-service.nl
   []
 
 # Je organisatienaam zoals die in de officiële bekendmakingen staat (het veld
