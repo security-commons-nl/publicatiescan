@@ -1,0 +1,243 @@
+# publicatiescan
+
+Vind persoonsgegevens die per ongeluk in je eigen publicaties staan — BSN, IBAN,
+NAW, e-mail — in PDF, DOCX, XLSX en PPTX.
+
+Gemeenten publiceren duizenden documenten: bekendmakingen, raadsstukken, ingekomen
+brieven, Woo-besluiten, vergunningen. Daar zitten met enige regelmaat
+persoonsgegevens in die er niet in horen. Handmatig controleren is geen optie — het
+zijn er te veel. Deze tool doet wat een journalist ook zou doen: de publicatiekanalen
+uitlezen, de tekstlaag uit de documenten halen, en zoeken naar patronen die alleen een
+persoonsgegeven kúnnen zijn (een 9-cijferige reeks die de elfproef doorstaat, een IBAN
+dat de mod-97-controle doorstaat).
+
+Het verschil is dat jij het als eerste weet.
+
+> ## Scope
+>
+> **Richt deze tool uitsluitend op de publicatiekanalen van je eigen organisatie.**
+> Het scannen van portalen van een andere organisatie is scannen zonder grondslag,
+> hoe goed je bedoelingen ook zijn.
+>
+> De crawler respecteert `robots.txt`, houdt een pauze tussen requests aan, en
+> identificeert zich met een user-agent waarin jouw organisatie en een contactadres
+> staan. Laat dat zo.
+
+---
+
+## Handleiding
+
+### 1. Installeren
+
+Je hebt Python 3.10 of nieuwer nodig.
+
+```bash
+git clone https://github.com/security-commons-nl/publicatiescan.git
+cd publicatiescan
+
+python -m venv .venv
+.venv\Scripts\activate            # Windows
+# source .venv/bin/activate       # macOS / Linux
+
+pip install -r requirements.txt
+```
+
+### 2. Config invullen
+
+```bash
+copy config.example.yaml config.yaml     # Windows
+# cp config.example.yaml config.yaml     # macOS / Linux
+```
+
+Open `config.yaml`. Vier dingen moet je zelf invullen; de rest kun je laten staan.
+
+**`eigen_domeinen`** — je eigen e-maildomeinen.
+
+```yaml
+eigen_domeinen:
+  - jouwgemeente.nl
+```
+
+Dit is belangrijker dan het lijkt. Een e-mailadres van een medewerker op een
+werkadres is geen datalek; een privé-adres van een inwoner in een ingekomen brief
+wél. De scanner gebruikt dit veld om het verschil te maken — vul je het niet in, dan
+komt élk e-mailadres als bevinding terug en verdrinkt het echte signaal in je eigen
+organisatie-adressen.
+
+**`gemeenten`** — je organisatienaam zoals die in de officiële bekendmakingen staat.
+
+```yaml
+gemeenten:
+  - Jouwgemeente
+```
+
+Dat is het veld `dt.creator` in de landelijke bekendmakingen-API, en dat is voor
+gemeenten vrijwel altijd gewoon de gemeentenaam, zonder "gemeente" ervoor. Werk je
+voor een samenwerkingsverband, zet ze dan allemaal in de lijst — dan scan je in één
+run voor alle deelnemers.
+
+**`output_dir`** — waar de downloads en het rapport landen.
+
+```yaml
+output_dir: "D:/scan-output"
+```
+
+**Zet dit buiten je OneDrive, SharePoint of Dropbox.** Het kunnen duizenden bestanden
+worden, en ze bevatten per definitie mogelijk persoonsgegevens. Die wil je niet laten
+synchroniseren naar een gedeelde map.
+
+**`politeness.user_agent`** — je organisatie en een echt contactadres.
+
+```yaml
+user_agent: "Gemeente Jouwgemeente publicatiescan (interne AVG-controle; contact: informatiebeveiliging@jouwgemeente.nl)"
+```
+
+Een beheerder die dit verkeer in zijn logs ziet, moet binnen een minuut kunnen zien
+wie je bent en je kunnen bellen. Dat is niet alleen netjes, het voorkomt ook dat je
+eigen SOC een incident opent op jouw scan.
+
+### 3. Draaien — begin met de bekendmakingen
+
+Er zijn twee manieren om aan documenten te komen, en je begint met de makkelijke.
+
+**De API-route (`--sru`).** Alle officiële bekendmakingen van alle Nederlandse
+overheden — Gemeenteblad, Staatscourant, Waterschapsblad — staan op
+`officielebekendmakingen.nl` en zijn volledig op te halen via de landelijke KOOP
+SRU-API. Dat is een echte API met directe PDF-links: geen crawlen, geen HTML parsen,
+geen belasting van je eigen webserver. Overheid.nl ontraadt scrapen van dat kanaal
+expliciet en wijst deze API aan als de norm. Voor de meeste gemeenten is dit meteen
+het grootste kanaal in aantallen documenten — vergunning-kennisgevingen met adressen
+in de titel zitten hier allemaal in.
+
+Begin met een korte proefrun:
+
+```bash
+python avg_scan.py --config config.yaml --sru --sru-max 50
+```
+
+Dat haalt de 50 meest recente bekendmakingen op, scant ze, en schrijft een rapport.
+Duurt een paar minuten. Werkt dat, dan de volle run:
+
+```bash
+python avg_scan.py --config config.yaml --sru --sru-max 5000
+```
+
+Wil je alleen recent materiaal, gebruik dan een datumgrens:
+
+```bash
+python avg_scan.py --config config.yaml --sru --sru-since 2026-01-01
+```
+
+**De crawl-route.** Voor kanalen zonder API — je raadsinformatiesysteem, je
+Woo-portaal, je eigen website. Vul `seeds` in `config.yaml` en draai zonder `--sru`:
+
+```bash
+python avg_scan.py --config config.yaml --max-pages 200      # proefrun
+python avg_scan.py --config config.yaml                      # volle run
+```
+
+Let op: **het raadsinformatiesysteem is empirisch het grootste risico**, niet de
+bekendmakingen. Ingekomen brieven van inwoners en hun bijlagen zijn precies waar het
+in de praktijk misgaat. Dat kanaal heeft alleen zelden een nette API, dus daar moet je
+crawlen — en elk RIS-product (Notubiz, iBabs, Parlaeus, Qualigraf, GO.) werkt net
+anders. Sommige zijn JavaScript-applicaties waar deze crawler niet doorheen komt.
+Loop dat kanaal dus niet alleen machinaal na.
+
+Overige vlaggen:
+
+| Vlag | Doet |
+|---|---|
+| `--sru` | Ingest via de bekendmakingen-API in plaats van crawlen |
+| `--sru-creators Naam1,Naam2` | Overschrijft `gemeenten` uit de config |
+| `--sru-max N` | Maximaal N records per organisatie (standaard 150) |
+| `--sru-since JJJJ-MM-DD` | Alleen bekendmakingen vanaf deze datum |
+| `--max-pages N` | Crawl-limiet, handig voor een proefrun |
+| `--report-only` | Bouwt alleen het rapport opnieuw uit de bestaande status |
+
+Onderbreken met Ctrl-C mag: de status staat in een SQLite-database in je output-map,
+en de volgende run pakt de wachtrij weer op waar hij gebleven was. Identieke bestanden
+worden op sha256 gededupliceerd, dus dezelfde bijlage op vijf plekken wordt één keer
+gescand.
+
+### 4. Het rapport lezen
+
+Je krijgt `rapport.html` (printbaar) en `rapport.xlsx` in je output-map, gesorteerd op
+ernst. **Alle gevonden waarden zijn gemaskeerd** — ook de andere persoonsgegevens die
+toevallig in hetzelfde tekstfragment stonden. Het rapport is dus zelf geen datalek.
+
+| Ernst | Wat |
+|---|---|
+| **Kritiek** | BSN (elfproef geldig) · paspoort-/rijbewijsnummer nabij een ID-term |
+| **Hoog** | IBAN (mod-97 geldig) · geboortedatum die expliciet zo benoemd wordt |
+| **Middel** | E-mail op een vreemd domein · mobiel nummer · **afwijkend adres** · verborgen Excel-tabblad |
+| **Laag** | E-mail op je eigen domein · vast nummer · het onderwerp-adres van een besluit |
+
+---
+
+## Je hebt een hit. Wat nu?
+
+**Het rapport ordent en maskeert. Het oordeelt niet.** Elke bevinding vraagt menselijke
+beoordeling, en de meeste zijn geen lek.
+
+**Begin bij Kritiek.** Een BSN in een gepubliceerd document is vrijwel nooit legitiem.
+De elfproef geeft weinig vals-positieven, maar hij is niet waterdicht: een zaaknummer
+van negen cijfers kan hem toevallig doorstaan. Open het document en kijk.
+
+**Let op de adres-triage.** De scanner scheidt het *onderwerp-adres* van een *afwijkend
+adres*. Een verleende omgevingsvergunning hóórt het bouwadres te noemen — dat is geen
+lek, en die hits worden naar Laag gezet. Maar staat er een postcode in het document die
+niet het onderwerp-adres is, dan blijft die op Middel staan met de opmerking *"adres
+niet op pagina 1 — mogelijk niet het onderwerp-adres"*. **Dat is je signaal.** Dat is
+het adres van de bezwaarmaker, de buurman, de briefschrijver. Kijk daar het eerst.
+
+**Bij een echt lek: niet stil verwijderen.** Dit is de fout die het vaakst gemaakt
+wordt. Raadsstukken, Woo-besluiten en bekendmakingen kennen een publicatieplicht — je
+mag ze niet zomaar offline halen. De juiste handeling is het document **vervangen door
+een correct geanonimiseerde versie**.
+
+**Leg de AVG-afweging bij je FG.** Of dit een datalek is dat gemeld moet worden bij de
+Autoriteit Persoonsgegevens, en of betrokkenen geïnformeerd moeten worden, is niet aan
+de scanner en niet aan de scanner-bediener. Dat is het werk van je Functionaris
+Gegevensbescherming of privacy-officer. Lever de bevinding, lever het document, laat de
+afweging daar.
+
+**Deel je bevindingen niet in een issue.** Zie [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
+## Wat het niet doet
+
+**Gescande PDF's zonder tekstlaag.** Een ingescande brief is voor deze tool een
+plaatje. Ze worden geteld en gemarkeerd als OCR-kandidaat, maar niet gelezen. Juist
+daar zit vaak het risico — een gescande handtekening onder een formulier. OCR staat op
+de lijst voor fase 2.
+
+**Documenten die niet online staan.** Vergunningdossiers met situatietekeningen en
+ondertekende formulieren staan bij veel gemeenten niet in een portaal maar worden op
+verzoek gemaild. Die krijg je hiermee niet te pakken; dat moet je organisatorisch
+borgen.
+
+**Een zwarte balk over een leesbare tekstlaag** wordt wél gevonden — de tekst zit er
+immers nog. Dat is een van de drie klassiekers, samen met verborgen Excel-tabbladen
+(worden gemeld) en persoonsgegevens in documentmetadata (worden gescand).
+
+## Structuur
+
+```
+avg_scan.py            CLI + orkestratie (ingest → analyse → rapport)
+config.example.yaml    voorbeeldconfig
+avgscan/
+  config.py            config laden/normaliseren
+  sru.py               ingest via de KOOP SRU-API (bekendmakingen)
+  crawl.py             beleefde crawler (robots.txt, rate limit, domeinfilter)
+  fetch.py             download + sha256 (dedup, groottelimiet)
+  extract.py           tekstlaag + metadata per bestandstype
+  detect.py            detectors + validators (elfproef, mod-97) + maskering
+  report.py            HTML- en Excel-rapport
+  state.py             SQLite-status (hervatten + dedup + findings)
+```
+
+## Licentie
+
+[EUPL-1.2](LICENSE) — Europese open-sourcelicentie, dezelfde als de rest van
+[security-commons-nl](https://github.com/security-commons-nl).

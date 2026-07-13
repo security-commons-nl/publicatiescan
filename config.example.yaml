@@ -1,0 +1,101 @@
+# publicatiescan — voorbeeldconfig.
+#
+# Kopieer dit bestand naar config.yaml en vul het in voor je eigen organisatie.
+# config.yaml staat in .gitignore en wordt dus nooit meegecommit.
+#
+# SCOPE — lees dit eerst. Vul hier ALLEEN publicatiekanalen van je EIGEN
+# organisatie in. Deze tool op de portalen van een andere organisatie richten is
+# scannen zonder grondslag; daar heb je niets te zoeken.
+
+
+# ---------------------------------------------------------------------------
+# 1. Wie ben je
+# ---------------------------------------------------------------------------
+
+# Je eigen e-maildomeinen. Een e-mailadres op zo'n domein is het werkadres van een
+# medewerker — geen datalek — en krijgt daarom ernst 'Laag'. Laat je dit leeg, dan
+# komt elk gevonden e-mailadres als 'Middel' in het rapport en verzuip je in ruis.
+# Subdomeinen tellen automatisch mee.
+eigen_domeinen:
+  # - jouwgemeente.nl
+  # - jouwsamenwerkingsverband.nl
+  []
+
+# Je organisatienaam zoals die in de officiële bekendmakingen staat (het veld
+# dt.creator in de landelijke SRU-API). Voor gemeenten is dat vrijwel altijd
+# gewoon de gemeentenaam, zonder "gemeente" ervoor. Meerdere mag: dan scan je
+# meteen voor je samenwerkingspartners.
+# Alleen nodig voor de --sru-modus.
+gemeenten:
+  # - Jouwgemeente
+  []
+
+
+# ---------------------------------------------------------------------------
+# 2. Wat crawlen we (alleen nodig ZONDER --sru)
+# ---------------------------------------------------------------------------
+
+# Startpunten van de crawl: je eigen publicatiekanalen. Het raadsinformatiesysteem
+# is hier meestal het interessantst — ingekomen brieven van inwoners en hun
+# bijlagen zijn empirisch het grootste risico.
+seeds:
+  # - https://<raadsinformatiesysteem>.nl/...
+  # - https://<jouwgemeente>.nl/...        # website, bijlagen
+  # - https://<woo-portaal>/...            # Woo-besluiten met bijlagen
+  []
+
+# Alleen links binnen deze domeinen (en subdomeinen) worden gevolgd.
+# Leeg = automatisch afgeleid uit de hostnames van de seeds. Dit is je vangrail
+# tegen per ongeluk de halve internet afcrawlen — laat 'm niet te ruim staan.
+allowed_domains: []
+
+# Bestandstypen die worden gedownload en geanalyseerd.
+file_extensions: [pdf, docx, xlsx, xlsm, pptx]
+
+
+# ---------------------------------------------------------------------------
+# 3. Waar landt het
+# ---------------------------------------------------------------------------
+
+# Downloads, statusdatabase en het rapport. ZET DIT BUITEN JE CLOUDDRIVE
+# (OneDrive/SharePoint/Dropbox): het kunnen duizenden bestanden worden, en ze
+# bevatten per definitie mogelijk persoonsgegevens. Absoluut pad mag ook.
+output_dir: "./_scan-output"
+
+
+# ---------------------------------------------------------------------------
+# 4. Beleefdheid tegenover de server
+# ---------------------------------------------------------------------------
+# Deze waarden laat je met rust tenzij je een goede reden hebt. Je scant een
+# productieomgeving; je wilt hem niet omtrekken en je wilt herkenbaar zijn.
+politeness:
+  respect_robots: true            # robots.txt volgen
+  delay_seconds: 1.0              # pauze tussen requests per domein
+  timeout_seconds: 30
+  # Zet hier je EIGEN organisatie en een echt contactadres. Een beheerder die
+  # dit verkeer in zijn logs ziet, moet binnen één minuut kunnen achterhalen wie
+  # je bent en je kunnen bellen.
+  user_agent: "<jouw organisatie> publicatiescan (interne AVG-controle; contact: <e-mailadres>)"
+
+
+# ---------------------------------------------------------------------------
+# 5. Grenzen (voorkomt een eindeloze crawl)
+# ---------------------------------------------------------------------------
+limits:
+  max_pages: 5000                 # max. HTML-pagina's om te volgen
+  max_files: 20000                # max. documenten om te analyseren
+  max_depth: 8                    # klikdiepte vanaf een seed
+  max_file_mb: 60                 # documenten groter dan dit overslaan
+
+
+# ---------------------------------------------------------------------------
+# 6. Detectie
+# ---------------------------------------------------------------------------
+detectors:
+  bsn: true                       # 9-cijferige reeks, gevalideerd met de elfproef
+  iban: true                      # NL-IBAN, gevalideerd met mod-97
+  email: true
+  telefoon: true
+  geboortedatum: true
+  naw: true                       # postcode + huisnummer
+  paspoort_rijbewijs: true        # laag vertrouwen, alleen nabij een ID-term

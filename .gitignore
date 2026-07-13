@@ -1,0 +1,10 @@
+config.yaml
+_scan-output/
+rapport.html
+rapport.xlsx
+*.db
+*.db-wal
+*.db-shm
+__pycache__/
+*.pyc
+.venv/
