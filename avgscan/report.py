@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import html
 import os
+import re
 from datetime import date
 
 from .detect import SEVERITY_ORDER
@@ -76,6 +77,17 @@ def write_html(rows, out_path, scanned_files, scanned_pages):
         f.write(doc)
 
 
+_STUURTEKENS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+def _excel_veilig(v):
+    """Strip stuurtekens uit de PDF-tekstlaag; openpyxl weigert ze (IllegalCharacterError)
+    en laat anders de hele rapportage klappen aan het eind van een lange run."""
+    if not isinstance(v, str):
+        return v
+    return _STUURTEKENS.sub("", v)
+
+
 def write_excel(rows, out_path):
     import openpyxl
     from openpyxl.styles import Font, PatternFill
@@ -90,7 +102,8 @@ def write_excel(rows, out_path):
         c.font = Font(bold=True, color="FFFFFF")
         c.fill = PatternFill("solid", fgColor="1F4E79")
     for url, path, soort, ernst, waarde, loc, ctx, opm in rows:
-        ws.append([ernst, soort, waarde, loc, url, os.path.basename(path or ""), ctx, opm])
+        ws.append([_excel_veilig(v) for v in
+                   (ernst, soort, waarde, loc, url, os.path.basename(path or ""), ctx, opm)])
     for col, breedte in zip("ABCDEFGH", (10, 20, 22, 18, 55, 30, 45, 30)):
         ws.column_dimensions[col].width = breedte
     ws.freeze_panes = "A2"

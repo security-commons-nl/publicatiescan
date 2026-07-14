@@ -137,3 +137,31 @@ def test_bsn_wordt_kritiek_en_gemaskeerd_in_context():
 
 def test_zaaknummer_zonder_geldige_elfproef_geen_bsn():
     assert waarden("Zaaknummer 111222334 behandeld", "bsn") == []
+
+
+# Kenmerk-filter (echte valse positieve, gevonden in de historische scan 14-07-2026:
+# "PZH-2010-<9 cijfers>" van de provincie Zuid-Holland doorstaat de elfproef).
+def test_besluitkenmerk_wordt_afgewaardeerd_naar_laag():
+    treffers = soorten("bij besluit d.d. 1 juni 2010, PZH-2010-111222333, goedkeuring", "bsn")
+    assert len(treffers) == 1                     # niet weggegooid...
+    assert treffers[0].ernst == LAAG              # ...maar wel uit de triagelijst
+    assert "kenmerk" in treffers[0].opmerking
+
+
+def test_zaaknummer_met_geldige_elfproef_wordt_afgewaardeerd():
+    treffers = soorten("Zaaknummer: 111222333 is in behandeling", "bsn")
+    assert len(treffers) == 1
+    assert treffers[0].ernst == LAAG
+
+
+def test_echt_bsn_blijft_kritiek_ondanks_woord_nummer():
+    # "burgerservicenummer" mag NIET als kenmerk-prefix worden gelezen.
+    treffers = soorten("Burgerservicenummer: 111222333 van aanvrager", "bsn")
+    assert len(treffers) == 1
+    assert treffers[0].ernst == KRITIEK
+
+
+def test_los_bsn_zonder_prefix_blijft_kritiek():
+    treffers = soorten("Aanvrager 111222333 woont in Leiden", "bsn")
+    assert len(treffers) == 1
+    assert treffers[0].ernst == KRITIEK

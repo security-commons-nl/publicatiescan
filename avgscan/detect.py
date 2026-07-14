@@ -151,13 +151,44 @@ def _is_eigen_domein(adres: str) -> bool:
     return any(domein == d or domein.endswith("." + d) for d in _EIGEN_DOMEINEN)
 
 
+# Zaak-/besluitkenmerken bevatten vaak een 9-cijferige reeks die de elfproef toevallig
+# doorstaat (gevonden 14-07-2026: "PZH-2010-17…05", een kenmerk van de provincie Zuid-Holland).
+# Zo'n hit is geen BSN. We onderdrukken hem niet, maar waarderen hem af naar Laag: niets
+# raakt kwijt, de triagelijst blijft schoon.
+_KENMERK_PREFIX_RE = re.compile(
+    r"(?:"
+    r"[A-Za-z]{2,8}[-/](?:\d{2,4}[-/])?"          # PZH-2010- · Z- · UIT-2019-
+    r"|(?:zaak|dossier|registratie|besluit|document|kenmerk|corsa|olo)"
+    r"\s*(?:nummer|nr\.?|kenmerk)?\s*[:\-]?\s*"   # zaaknummer: · ons kenmerk -
+    r")$",
+    re.IGNORECASE,
+)
+# Staat er een BSN-term vlakbij, dan is het wél een BSN — die wint van het kenmerk-filter.
+_BSN_TERM_RE = re.compile(r"\b(?:bsn|burgerservicenummer|sofinummer|sofi-nummer)\b", re.IGNORECASE)
+
+
+def _is_kenmerk(text: str, start: int) -> bool:
+    """Wordt de cijferreeks direct voorafgegaan door een zaak-/besluitkenmerk?"""
+    prefix = text[max(0, start - 40):start]
+    if _BSN_TERM_RE.search(text[max(0, start - 60):start]):
+        return False
+    return bool(_KENMERK_PREFIX_RE.search(prefix))
+
+
 def _find_bsn(text, loc, out):
     for m in _BSN_RE.finditer(text):
         digits = re.sub(r"[ .]", "", m.group(1))
-        if is_valid_bsn(digits):
-            out.append(Finding("BSN", KRITIEK, digits, loc,
+        if not is_valid_bsn(digits):
+            continue
+        if _is_kenmerk(text, m.start()):
+            out.append(Finding("BSN", LAAG, digits, loc,
                                _snippet(text, m.start(), m.end(), m.group(1)),
-                               "9-cijferige reeks, geldig volgens elfproef"))
+                               "elfproef-geldig, maar onderdeel van een zaak-/besluitkenmerk "
+                               "— vrijwel zeker geen BSN"))
+            continue
+        out.append(Finding("BSN", KRITIEK, digits, loc,
+                           _snippet(text, m.start(), m.end(), m.group(1)),
+                           "9-cijferige reeks, geldig volgens elfproef"))
 
 
 def _find_iban(text, loc, out):

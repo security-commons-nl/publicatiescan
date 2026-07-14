@@ -29,10 +29,12 @@ def _iter_local(elem, name: str):
             yield e
 
 
-def build_query(creator: str, since: str | None = None) -> str:
+def build_query(creator: str, since: str | None = None, until: str | None = None) -> str:
     q = f'c.product-area==officielepublicaties AND dt.creator=="{creator}"'
     if since:
         q += f' AND dt.modified>="{since}"'
+    if until:
+        q += f' AND dt.modified<="{until}"'
     return q
 
 
@@ -56,15 +58,16 @@ def _title(record) -> str:
 
 def harvest(session, creator: str, max_records: int, since: str | None = None,
             page_size: int = 100, delay: float = 1.0, timeout: int = 30,
-            endpoint: str = SRU_ENDPOINT):
+            endpoint: str = SRU_ENDPOINT, until: str | None = None):
     """Yield (pdf_url, titel) voor één gemeente, tot max_records.
 
     Paginering volgt <nextRecordPosition>. Diepe paginering (startRecord ~15000)
-    geeft HTTP 500 bij KOOP; voor grote gemeenten dus slicen per tijdvenster (since).
+    geeft HTTP 500 bij KOOP; voor grote gemeenten dus slicen per tijdvenster
+    (since + until, bv. één kalenderjaar per slice).
     """
     got = 0
     start = 1
-    query = build_query(creator, since)
+    query = build_query(creator, since, until)
     while got < max_records:
         params = {
             "version": "2.0",
@@ -105,11 +108,12 @@ def harvest(session, creator: str, max_records: int, since: str | None = None,
 
 
 def count(session, creator: str, since: str | None = None,
-          timeout: int = 30, endpoint: str = SRU_ENDPOINT) -> int:
+          timeout: int = 30, endpoint: str = SRU_ENDPOINT,
+          until: str | None = None) -> int:
     """Totaal aantal records voor een gemeente (maximumRecords=0)."""
     params = {
         "version": "2.0", "operation": "searchRetrieve",
-        "query": build_query(creator, since), "maximumRecords": 0,
+        "query": build_query(creator, since, until), "maximumRecords": 0,
     }
     try:
         r = session.get(endpoint + "?" + urlencode(params), timeout=timeout)

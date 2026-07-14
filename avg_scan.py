@@ -57,20 +57,24 @@ def crawl_phase(cfg, crawler, st, max_pages):
             st.conn.commit()
 
 
-def sru_phase(cfg, crawler, st, creators, max_records, since):
+def sru_phase(cfg, crawler, st, creators, max_records, since, until=None):
     """Vul de bestandswachtrij via de KOOP SRU-API i.p.v. crawlen.
 
     Per gemeente de PDF-URL's van de officiële bekendmakingen ophalen en als 'file'
-    inschrijven; de analyse-fase downloadt en scant ze daarna. Valt terug op een
-    query zonder datumfilter als de since-query niets oplevert.
+    inschrijven; de analyse-fase downloadt en scant ze daarna.
+
+    Zonder tijdvenster valt een lege since-query terug op een query zonder datumfilter.
+    Met een expliciet venster (since+until) gebeurt dat NIET: bij per-jaar slicen zou een
+    leeg jaar anders alsnog de volledige historie binnenhalen.
     """
     from avgscan import sru
 
     total = 0
     for creator in creators:
         items = list(sru.harvest(crawler.session, creator, max_records, since,
-                                  delay=cfg.delay_seconds, timeout=cfg.timeout_seconds))
-        if not items and since:
+                                  delay=cfg.delay_seconds, timeout=cfg.timeout_seconds,
+                                  until=until))
+        if not items and since and not until:
             items = list(sru.harvest(crawler.session, creator, max_records, None,
                                       delay=cfg.delay_seconds, timeout=cfg.timeout_seconds))
         n = 0
@@ -148,6 +152,9 @@ def main(argv=None):
     ap.add_argument("--sru-max", type=int, default=150, help="max. records per gemeente")
     ap.add_argument("--sru-since", default=None,
                     help="alleen records met dt.modified >= JJJJ-MM-DD (bv. 2026-06-01)")
+    ap.add_argument("--sru-until", default=None,
+                    help="alleen records met dt.modified <= JJJJ-MM-DD; samen met --sru-since "
+                         "een tijdvenster (per jaar slicen omzeilt de diepe-pagineringsfout van KOOP)")
     args = ap.parse_args(argv)
 
     if not os.path.exists(args.config):
@@ -169,14 +176,16 @@ def main(argv=None):
 
     print(f"Output: {cfg.output_dir}")
     if args.sru:
-        print(f"Modus: SRU-API — gemeenten: {', '.join(creators)}"
-              + (f" · vanaf {args.sru_since}" if args.sru_since else ""))
+        venster = ""
+        if args.sru_since or args.sru_until:
+            venster = f" · {args.sru_since or 'begin'} t/m {args.sru_until or 'heden'}"
+        print(f"Modus: SRU-API — gemeenten: {', '.join(creators)}{venster}")
     else:
         print(f"Domeinen: {', '.join(cfg.allowed_domains) or '(uit seeds)'}")
 
     if not args.report_only:
         if args.sru:
-            sru_phase(cfg, crawler, st, creators, args.sru_max, args.sru_since)
+            sru_phase(cfg, crawler, st, creators, args.sru_max, args.sru_since, args.sru_until)
         else:
             crawl_phase(cfg, crawler, st, args.max_pages or cfg.max_pages)
         analyse_phase(cfg, crawler, st)
