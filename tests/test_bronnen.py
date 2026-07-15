@@ -63,6 +63,46 @@ def test_qg_doclinks_vindt_showdoc_en_showannex():
     assert len(links) == 2      # de detaildata-link (geen showdoc/showannex, geen .pdf) telt niet
 
 
+class _FakeResp:
+    def __init__(self, data):
+        self._data = data
+    def json(self):
+        return self._data
+
+
+class _FakeSession:
+    def __init__(self, data):
+        self._data = data
+    def get(self, url, timeout=None):
+        return _FakeResp(self._data)
+
+
+def test_qg_modules_uit_menu_lowercase_en_skip():
+    # Menu zoals Zoeterwoude het teruggeeft: CamelCase names + view-only entries.
+    menu = [
+        {"label": "Agenda's", "entries": [
+            {"name": "agenda", "label": "Vergaderingen"},
+            {"name": "Calendar", "label": "Kalender"}]},          # view-only -> skip
+        {"label": "Stukken", "entries": [
+            {"name": "Motie"}, {"name": "CouncilDocument"},
+            {"name": "BestuursDocument"}, {"name": "BeleidsDocument"},
+            {"name": "councilperiod"}]},                          # metadata -> skip
+    ]
+    mods = bronnen._qg_modules_uit_menu(_FakeSession(menu), "https://x/vji/public", _Cfg())
+    assert "councildocument" in mods and "bestuursdocument" in mods and "beleidsdocument" in mods
+    assert "motie" in mods and "agenda" in mods
+    assert "calendar" not in mods and "councilperiod" not in mods
+    assert all(m == m.lower() for m in mods)                     # alles lowercase
+
+
+def test_qg_modules_uit_menu_faalt_zacht():
+    # Onleesbaar menu -> None, zodat de aanroeper terugvalt op de standaardlijst.
+    class _Boom:
+        def get(self, url, timeout=None):
+            raise RuntimeError("geen verbinding")
+    assert bronnen._qg_modules_uit_menu(_Boom(), "https://x/vji/public", _Cfg()) is None
+
+
 def test_ibabs_vereist_credentials():
     with pytest.raises(BronNietGereed) as e:
         _draai(CONNECTORS["ibabs"], {"type": "ibabs"})

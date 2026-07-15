@@ -227,12 +227,38 @@ def _notubiz(bron, session, cfg):
 
 
 _DOC_EXT = (".pdf", ".docx", ".doc", ".xlsx", ".xls", ".xlsm", ".pptx", ".ppt")
-# Publieke modules van Qualigraf/Parlaeus die documenten bevatten. Postin = ingekomen
-# stukken van inwoners, empirisch het grootste risico. Niet elke gemeente heeft alle
-# modules aanstaan; een module die 404/geen lijst geeft, wordt stil overgeslagen (dat is
-# hier terecht: 'niet aanwezig', niet 'niets gevonden').
-_QG_MODULES = ["postin", "dossier", "question", "motie", "toezegging", "verordening",
-               "publicdocument", "raadsbesluit"]
+# Fallback-modulelijst (gebruikt als het menu-endpoint niet te lezen is). Postin = ingekomen
+# stukken van inwoners, empirisch het grootste risico; councildocument/bestuursdocument/
+# beleidsdocument = collegeberichten/raadsinformatiebrieven/vastgestelde verslagen (gevonden
+# 15-07-2026: die miste de oude hardcoded lijst bij Oegstgeest/Leiderdorp/Zoeterwoude). Niet
+# elke gemeente heeft alle modules aan; een module die 404/geen lijst geeft, wordt stil
+# overgeslagen (terecht: 'niet aanwezig', niet 'niets gevonden').
+_QG_MODULES = ["postin", "councildocument", "bestuursdocument", "beleidsdocument", "dossier",
+               "question", "motie", "toezegging", "verordening", "publicdocument", "raadsbesluit"]
+# Menu-entries die geen documentmodule zijn (view-only) en dus overgeslagen worden.
+_QG_MENU_SKIP = {"calendar", "councilperiod"}
+
+
+def _qg_modules_uit_menu(session, base, cfg):
+    """Lees de publiek beschikbare modules uit /vji/public/menu/action=datalist.
+
+    Het menu verschilt PER GEMEENTE: de een publiceert via postin, de ander via
+    collegeberichten/raadsinformatiebrieven/verslagen. Door de modules uit het menu te halen
+    (lowercase de 'name'-velden) pakt de connector automatisch elke gemeente z'n eigen set,
+    i.p.v. een hardgecodeerde lijst die stil hele documentsoorten mist. Geeft None terug als
+    het menu onleesbaar is; de aanroeper valt dan terug op _QG_MODULES.
+    """
+    try:
+        m = session.get(f"{base}/menu/action=datalist", timeout=cfg.timeout_seconds).json()
+    except Exception:
+        return None
+    namen = []
+    for groep in (m if isinstance(m, list) else []):
+        for entry in (groep.get("entries", []) if isinstance(groep, dict) else []):
+            nm = (entry.get("name") or "").strip().lower()
+            if nm and nm not in _QG_MENU_SKIP and nm not in namen:
+                namen.append(nm)
+    return namen or None
 
 
 def _qg_doclinks(obj, out):
@@ -274,7 +300,9 @@ def _parlaeus(bron, session, cfg):
             "parlaeus/qualigraf vereist 'sites': lijst van {gemeente, host}, "
             "bv. {gemeente: X, host: x.parlaeus.nl}")
     naam = bron.get("naam", "qualigraf")
-    modules = bron.get("modules") or _QG_MODULES
+    # Modules expliciet in de config overschrijven de menu-ontdekking; anders wordt de
+    # modulelijst per gemeente uit het menu gehaald (zie _qg_modules_uit_menu).
+    modules_expliciet = bron.get("modules")
     # Volledige historie: de lijst filtert per jaar via /action=datalist/yr=<jaar>
     # (geverifieerd 14-07-2026). Zonder jaarrange = alleen het huidige jaar.
     van = bron.get("van")
@@ -294,6 +322,7 @@ def _parlaeus(bron, session, cfg):
                         timeout=cfg.timeout_seconds)
         except Exception:
             pass
+        modules = modules_expliciet or _qg_modules_uit_menu(session, base, cfg) or _QG_MODULES
         for module in modules:
             for suffix in jaar_suffix:
                 try:
