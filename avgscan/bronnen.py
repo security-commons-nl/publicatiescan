@@ -275,41 +275,53 @@ def _parlaeus(bron, session, cfg):
             "bv. {gemeente: X, host: x.parlaeus.nl}")
     naam = bron.get("naam", "qualigraf")
     modules = bron.get("modules") or _QG_MODULES
+    # Volledige historie: de lijst filtert per jaar via /action=datalist/yr=<jaar>
+    # (geverifieerd 14-07-2026). Zonder jaarrange = alleen het huidige jaar.
+    van = bron.get("van")
+    tot = bron.get("tot")
+    if van and tot:
+        jaren = list(range(int(van), int(tot) + 1))
+        jaar_suffix = [f"/yr={j}" for j in jaren]
+    else:
+        jaar_suffix = [""]           # alleen de standaardlijst (huidig jaar)
 
+    gezien = set()                   # dedup binnen deze run (zelfde item in meerdere jaren)
     for site in sites:
         host = site.get("host") or f"{site.get('gemeente', '').strip().lower()}.parlaeus.nl"
         base = f"https://{host}/vji/public"
-        # sessie (niet strikt nodig — API is cookieless — maar netjes en toekomstvast)
         try:
             session.get(f"https://{host}/vji/general/session/action=moduledata",
                         timeout=cfg.timeout_seconds)
         except Exception:
             pass
         for module in modules:
-            try:
-                r = session.get(f"{base}/{module}/action=datalist/", timeout=cfg.timeout_seconds)
-                data = r.json()
-            except Exception:
-                continue                     # module niet aanwezig/aan -> terecht overslaan
-            rows = data if isinstance(data, list) else data.get("rows", data.get("data", []))
-            for row in rows:
-                hexkey = row.get("hexkey") or row.get("gd")
-                if not hexkey:
-                    continue
+            for suffix in jaar_suffix:
                 try:
-                    det = session.get(f"{base}/{module}/action=detaildata/gd={hexkey}",
-                                      timeout=cfg.timeout_seconds).json()
+                    r = session.get(f"{base}/{module}/action=datalist/{suffix.lstrip('/')}",
+                                    timeout=cfg.timeout_seconds)
+                    data = r.json()
                 except Exception:
-                    continue
-                links = []
-                _qg_doclinks(det, links)
-                for link in links:
-                    url = link if link.startswith("http") else f"https://{host}{link}"
-                    ext = url.lower().rsplit("?", 1)[0].rsplit(".", 1)[-1]
-                    yield Document(bron=naam, url=url, ext=ext,
-                                   titel=row.get("subject", row.get("title", "")))
-                if cfg.delay_seconds:
-                    time.sleep(cfg.delay_seconds)
+                    continue                 # module niet aanwezig/aan -> terecht overslaan
+                rows = data if isinstance(data, list) else data.get("rows", data.get("data", []))
+                for row in rows:
+                    hexkey = row.get("hexkey") or row.get("gd")
+                    if not hexkey or (module, hexkey) in gezien:
+                        continue
+                    gezien.add((module, hexkey))
+                    try:
+                        det = session.get(f"{base}/{module}/action=detaildata/gd={hexkey}",
+                                          timeout=cfg.timeout_seconds).json()
+                    except Exception:
+                        continue
+                    links = []
+                    _qg_doclinks(det, links)
+                    for link in links:
+                        url = link if link.startswith("http") else f"https://{host}{link}"
+                        ext = url.lower().rsplit("?", 1)[0].rsplit(".", 1)[-1]
+                        yield Document(bron=naam, url=url, ext=ext,
+                                       titel=row.get("subject", row.get("title", "")))
+                    if cfg.delay_seconds:
+                        time.sleep(cfg.delay_seconds)
 
 
 def _ibabs(bron, session, cfg):
