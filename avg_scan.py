@@ -88,8 +88,69 @@ def sru_phase(cfg, crawler, st, creators, max_records, since, until=None):
     return total
 
 
+def _detecteer(cfg, chunks, meta):
+    """Draai de detectors over de tekstblokken + metadata. Gedeeld door bestands- en
+    tekst-documenten, zodat beide precies dezelfde detectie krijgen."""
+    findings = []
+    for locatie, tekst in chunks:
+        findings.extend(scan_text(tekst, locatie, cfg.detectors))
+    if meta:
+        meta_txt = "\n".join(f"{k}: {v}" for k, v in meta.items())
+        findings.extend(scan_text(meta_txt, "metadata", cfg.detectors))
+        if meta.get("_verborgen_tabbladen"):
+            from avgscan.detect import Finding, MIDDEL
+            findings.append(Finding("Verborgen tabblad", MIDDEL,
+                                    meta["_verborgen_tabbladen"], "metadata",
+                                    "", "Excel bevat verborgen tabblad(en) — controleren"))
+    return annotate_naw_context(findings, chunks)
+
+
+def bronnen_phase(cfg, crawler, st):
+    """Draai elke geconfigureerde bron via zijn connector.
+
+    URL-documenten gaan de bestandswachtrij in (analyse_phase downloadt + scant ze later).
+    Tekst-documenten (bv. Open Raadsinformatie) worden hier meteen gescand, want de tekst
+    is al geëxtraheerd. Een connector die niet kan draaien faalt LUID (BronNietGereed) en
+    wordt als niet-uitgevoerd gemeld, nooit stil als 'niets gevonden'.
+    """
+    from avgscan import bronnen
+
+    for bron in cfg.bronnen:
+        typ = bron.get("type")
+        naam = bron.get("naam", typ or "?")
+        conn = bronnen.CONNECTORS.get(typ)
+        if conn is None:
+            print(f"  ! bron '{naam}': onbekend type '{typ}' — overgeslagen "
+                  f"(bekend: {', '.join(sorted(bronnen.CONNECTORS))})")
+            continue
+        n_url = n_txt = n_hit = 0
+        try:
+            with tqdm(desc=f"bron '{naam}'", unit="doc") as bar:
+                for doc in conn(bron, crawler.session, cfg):
+                    bar.update(1)
+                    if doc.text is not None or doc.chunks:   # tekst-document (al geëxtraheerd)
+                        if st.text_seen(doc.bron, doc.doc_id):
+                            continue
+                        chunks = doc.chunks or [("tekst", doc.text)]
+                        findings = _detecteer(cfg, chunks, doc.meta)
+                        if findings:
+                            st.add_findings(doc.doc_id, None, findings)
+                            n_hit += len(findings)
+                        st.mark_text(doc.bron, doc.doc_id)
+                        n_txt += 1
+                    elif doc.url:                       # download-document
+                        if not st.file_seen(doc.url):
+                            st.add_file(doc.url, doc.ext)
+                            n_url += 1
+            st.conn.commit()
+            print(f"  bron '{naam}' ({typ}): {n_url} download-URL('s), "
+                  f"{n_txt} tekstdoc(s), {n_hit} directe hit(s)")
+        except bronnen.BronNietGereed as e:
+            print(f"  ! bron '{naam}' ({typ}) NIET UITGEVOERD: {e}")
+
+
 def analyse_phase(cfg, crawler, st):
-    """Download elk document en detecteer persoonsgegevens."""
+    """Download elk document uit de wachtrij en detecteer persoonsgegevens."""
     total = st.count_files_total()
     done_files = 0
     with tqdm(total=total, desc="Analyseren", unit="doc") as bar:
@@ -100,7 +161,7 @@ def analyse_phase(cfg, crawler, st):
             url, ext = row
             bar.update(1)
             done_files += 1
-            crawler._throttle(url)  # beleefd tegenover repository.overheid.nl
+            crawler._throttle(url)  # beleefd tegenover de bronserver
             local, sha = fetch.download(
                 crawler.session, url, cfg.output_dir, cfg.max_file_mb, cfg.timeout_seconds
             )
@@ -111,20 +172,15 @@ def analyse_phase(cfg, crawler, st):
                 st.mark_file(url, "done", sha=sha, local_path=local, note="duplicaat")
                 continue
 
-            chunks, meta = extract.extract(local, ext)
-            findings = []
-            for locatie, tekst in chunks:
-                findings.extend(scan_text(tekst, locatie, cfg.detectors))
-            # metadata als één tekstblok meescannen (auteur/laatst gewijzigd door e.d.)
-            if meta:
-                meta_txt = "\n".join(f"{k}: {v}" for k, v in meta.items())
-                findings.extend(scan_text(meta_txt, "metadata", cfg.detectors))
-                if meta.get("_verborgen_tabbladen"):
-                    from avgscan.detect import Finding, MIDDEL
-                    findings.append(Finding("Verborgen tabblad", MIDDEL,
-                                            meta["_verborgen_tabbladen"], "metadata",
-                                            "", "Excel bevat verborgen tabblad(en) — controleren"))
-            findings = annotate_naw_context(findings, chunks)
+            try:
+                chunks, meta = extract.extract(local, ext)
+            except Exception as e:
+                # Eén kapot document mag de run niet stoppen, maar verdwijnt ook niet stil:
+                # het blijft als 'error' zichtbaar in de status, dus telbaar als gat.
+                st.mark_file(url, "error", sha=sha, local_path=local,
+                             note=f"extractie mislukt: {type(e).__name__}")
+                continue
+            findings = _detecteer(cfg, chunks, meta)
             if findings:
                 st.add_findings(url, local, findings)
             st.mark_file(url, "done", sha=sha, local_path=local,
@@ -160,8 +216,14 @@ def main(argv=None):
     if not os.path.exists(args.config):
         sys.exit(f"Config niet gevonden: {args.config} (kopieer config.example.yaml).")
     cfg = Config.load(args.config)
-    if not cfg.seeds and not args.report_only and not args.sru:
-        sys.exit("Geen seeds in de config. Vul 'seeds:' of gebruik --sru.")
+
+    # Drie manieren om te draaien, in volgorde van voorrang:
+    #   1. expliciete CLI-vlag --sru (backward-compatibel, bv. per-jaar-slices);
+    #   2. een 'bronnen:'-lijst in de config (het nieuwe, meerbronnige model);
+    #   3. de oude enkelvoudige 'seeds:'-crawl.
+    gebruik_bronnen = bool(cfg.bronnen) and not args.sru
+    if not cfg.seeds and not cfg.bronnen and not args.report_only and not args.sru:
+        sys.exit("Geen bronnen. Vul 'bronnen:' of 'seeds:' in de config, of gebruik --sru.")
 
     creators = ([c.strip() for c in args.sru_creators.split(",") if c.strip()]
                 if args.sru_creators else cfg.gemeenten)
@@ -180,18 +242,29 @@ def main(argv=None):
         if args.sru_since or args.sru_until:
             venster = f" · {args.sru_since or 'begin'} t/m {args.sru_until or 'heden'}"
         print(f"Modus: SRU-API — gemeenten: {', '.join(creators)}{venster}")
+    elif gebruik_bronnen:
+        namen = ", ".join(b.get("naam", b.get("type", "?")) for b in cfg.bronnen)
+        print(f"Modus: bronnen — {namen}")
     else:
         print(f"Domeinen: {', '.join(cfg.allowed_domains) or '(uit seeds)'}")
 
-    if not args.report_only:
-        if args.sru:
-            sru_phase(cfg, crawler, st, creators, args.sru_max, args.sru_since, args.sru_until)
-        else:
-            crawl_phase(cfg, crawler, st, args.max_pages or cfg.max_pages)
-        analyse_phase(cfg, crawler, st)
+    # De statusdatabase MOET dicht, ook als een slice klapt: een openstaande SQLite-verbinding
+    # laat elke volgende run stranden op "database is locked". Gezien 14-07-2026: één document
+    # met een kapotte tekstlaag nam zo 23 volgende slices mee.
+    try:
+        if not args.report_only:
+            if args.sru:
+                sru_phase(cfg, crawler, st, creators, args.sru_max, args.sru_since, args.sru_until)
+            elif gebruik_bronnen:
+                bronnen_phase(cfg, crawler, st)
+            else:
+                crawl_phase(cfg, crawler, st, args.max_pages or cfg.max_pages)
+            analyse_phase(cfg, crawler, st)
 
-    html_path, xlsx_path, n = build_report(cfg, st)
-    st.close()
+        html_path, xlsx_path, n = build_report(cfg, st)
+    finally:
+        st.close()
+
     print(f"\nKlaar. {n} bevinding(en).")
     print(f"  HTML : {html_path}")
     print(f"  Excel: {xlsx_path}")

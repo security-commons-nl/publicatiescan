@@ -9,8 +9,27 @@ from __future__ import annotations
 import os
 
 
+def _schoon(s):
+    """Verwijder ongeldige Unicode (lone surrogates) uit geëxtraheerde tekst.
+
+    Een kapotte tekstlaag kan tekens opleveren die Python niet naar UTF-8 kan schrijven.
+    Onbehandeld sloopt dat de SQLite-schrijfactie (UnicodeEncodeError: surrogates not allowed)
+    en daarmee de hele run. Gezien 14-07-2026 op een bekendmaking uit 2021.
+    """
+    if not isinstance(s, str):
+        return s
+    return s.encode("utf-8", "replace").decode("utf-8", "replace")
+
+
 def extract(path: str, ext: str):
     """Return (chunks, metadata). chunks = list[(locatie, tekst)]."""
+    chunks, meta = _extract_ruw(path, ext)
+    chunks = [(_schoon(loc), _schoon(txt)) for loc, txt in chunks]
+    meta = {_schoon(k): _schoon(v) for k, v in meta.items()}
+    return chunks, meta
+
+
+def _extract_ruw(path: str, ext: str):
     ext = ext.lower().lstrip(".")
     try:
         if ext == "pdf":

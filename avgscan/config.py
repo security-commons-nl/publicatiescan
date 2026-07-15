@@ -26,6 +26,10 @@ class Config:
 
         self.detectors = d.get("detectors", {})
 
+        # Meerbronnige modus: een lijst bronnen, elk met een 'type' (zie avgscan/bronnen.py)
+        # en typespecifieke parameters. Leeg = oude enkelvoudige modus (seeds/SRU).
+        self.bronnen = [b for b in (d.get("bronnen") or []) if isinstance(b, dict) and b.get("type")]
+
         # Eigen e-maildomeinen (werkadressen van medewerkers -> ernst Laag).
         self.eigen_domeinen = [str(x).strip().lstrip("@")
                                for x in (d.get("eigen_domeinen") or []) if str(x).strip()]

@@ -38,21 +38,55 @@ gemeenten:
 
 
 # ---------------------------------------------------------------------------
-# 2. Wat crawlen we (alleen nodig ZONDER --sru)
+# 2. Welke bronnen scan je  (het meerbronnige model)
 # ---------------------------------------------------------------------------
-
-# Startpunten van de crawl: je eigen publicatiekanalen. Het raadsinformatiesysteem
-# is hier meestal het interessantst — ingekomen brieven van inwoners en hun
-# bijlagen zijn empirisch het grootste risico.
-seeds:
-  # - https://<raadsinformatiesysteem>.nl/...
-  # - https://<jouwgemeente>.nl/...        # website, bijlagen
-  # - https://<woo-portaal>/...            # Woo-besluiten met bijlagen
+# Een lijst 'bronnen'. Elke bron heeft een 'type' dat naar een connector wijst
+# (avgscan/bronnen.py) plus typespecifieke parameters. Zet bronnen die je (nog)
+# niet wilt draaien weg door ze te verwijderen of uit te commentariëren.
+#
+# Beschikbare types en hun status (getest 14-07-2026):
+#   sru                 werkend  — officiële bekendmakingen via de landelijke KOOP-API
+#   crawl               werkend  — beleefde HTML-crawl van je eigen website/portalen
+#   openraadsinformatie werkend  — raadsinformatie via de landelijke Elasticsearch-API;
+#                                  de tekst is daar al geëxtraheerd (snel, geen download).
+#                                  Dekking en actualiteit verschillen per gemeente.
+#   notubiz             deels    — nog niet af (enumeratie van document-id's); faalt luid
+#   parlaeus / qualigraf deels   — zelfde platform; API-basis bekend, nog niet af; faalt luid.
+#                                  LET OP: robots.txt = Disallow: / → alleen ná crawl-akkoord.
+#   ibabs               skelet   — vereist sitename + API-sleutel; faalt luid zonder credentials
+#
+# Een connector die niet kan draaien faalt LUID en wordt als 'niet uitgevoerd' gemeld —
+# nooit stil als 'niets gevonden'. Een lege uitkomst mag nooit 'schoon' betekenen.
+bronnen:
+  # - naam: bekendmakingen
+  #   type: sru
+  #   gemeenten: [Jouwgemeente]        # standaard: de 'gemeenten:' hierboven
+  #   vanaf: "2014-01-01"              # optioneel tijdvenster (dt.modified)
+  #   tot:   "2026-12-31"
+  #
+  # - naam: raadsinformatie-landelijk
+  #   type: openraadsinformatie
+  #   gemeenten: [Jouwgemeente]        # moet als ori_<gemeente>-index bestaan, anders faalt het luid
+  #
+  # - naam: raadsinformatie-eigen-RIS   # Qualigraf/Parlaeus — nog niet af; robots Disallow
+  #   type: qualigraf
+  #   sites:
+  #     - { gemeente: Jouwgemeente, host: jouwgemeente.parlaeus.nl }
+  #   negeer_robots: false             # pas true ná crawl-akkoord + SOC/leverancier informeren
+  #
+  # - naam: website-bijlagen
+  #   type: crawl
+  #   seeds: [ "https://www.jouwgemeente.nl/..." ]
   []
 
-# Alleen links binnen deze domeinen (en subdomeinen) worden gevolgd.
-# Leeg = automatisch afgeleid uit de hostnames van de seeds. Dit is je vangrail
-# tegen per ongeluk de halve internet afcrawlen — laat 'm niet te ruim staan.
+# Startpunten voor de OUDE enkelvoudige crawl-modus (zonder 'bronnen:' en zonder --sru).
+# Voor nieuwe configuraties gebruik je liever een crawl-bron hierboven.
+seeds:
+  # - https://<jouwgemeente>.nl/...
+  []
+
+# Alleen links binnen deze domeinen (en subdomeinen) worden gevolgd. Leeg = automatisch
+# afgeleid uit de seeds. Je vangrail tegen per ongeluk de halve internet afcrawlen.
 allowed_domains: []
 
 # Bestandstypen die worden gedownload en geanalyseerd.

@@ -128,20 +128,45 @@ Wil je alleen recent materiaal, gebruik dan een datumgrens:
 python avg_scan.py --config config.yaml --sru --sru-since 2026-01-01
 ```
 
-**De crawl-route.** Voor kanalen zonder API — je raadsinformatiesysteem, je
-Woo-portaal, je eigen website. Vul `seeds` in `config.yaml` en draai zonder `--sru`:
+**De crawl-route.** Voor kanalen zonder API — je Woo-portaal, je eigen website.
+Vul `seeds` in `config.yaml` en draai zonder `--sru`:
 
 ```bash
 python avg_scan.py --config config.yaml --max-pages 200      # proefrun
 python avg_scan.py --config config.yaml                      # volle run
 ```
 
+### Meerdere bronnen tegelijk (`bronnen:`)
+
+Naast de losse `--sru`- en crawl-route kun je in `config.yaml` een lijst `bronnen`
+zetten. Elke bron heeft een `type` dat naar een connector wijst, plus zijn eigen
+parameters. Staat er een `bronnen:`-lijst, dan draait één run ze allemaal achter elkaar
+en schrijft één gecombineerd rapport. Zo scan je bekendmakingen, raadsinformatie en je
+website in één keer.
+
+```yaml
+bronnen:
+  - { naam: bekendmakingen, type: sru, gemeenten: [Jouwgemeente], vanaf: "2014-01-01" }
+  - { naam: raad, type: openraadsinformatie, gemeenten: [Jouwgemeente] }
+```
+
+De beschikbare types:
+
+| type | wat | status |
+|---|---|---|
+| `sru` | officiële bekendmakingen (KOOP-API) | werkend |
+| `crawl` | HTML-crawl van je eigen website/portalen | werkend |
+| `openraadsinformatie` | raadsinformatie via de landelijke Elasticsearch-API; **de tekst is daar al geëxtraheerd**, dus geen download en snel. Dezelfde bron die de VNG voor haar tweede lijst gebruikt. Dekking en actualiteit verschillen per gemeente | werkend |
+| `notubiz` | raadsinformatie Notubiz | nog niet af — faalt luid |
+| `parlaeus` / `qualigraf` | raadsinformatie Qualigraf/Parlaeus (**zelfde platform**). API-basis bekend, enumeratie nog niet af. `robots.txt` = `Disallow: /`, dus draaien mag pas ná crawl-akkoord + SOC/leverancier informeren | nog niet af — faalt luid |
+| `ibabs` | raadsinformatie iBabs; vereist `sitename` + `api_key` (geen open route) | skelet — faalt luid |
+
 Let op: **het raadsinformatiesysteem is empirisch het grootste risico**, niet de
-bekendmakingen. Ingekomen brieven van inwoners en hun bijlagen zijn precies waar het
-in de praktijk misgaat. Dat kanaal heeft alleen zelden een nette API, dus daar moet je
-crawlen — en elk RIS-product (Notubiz, iBabs, Parlaeus, Qualigraf, GO.) werkt net
-anders. Sommige zijn JavaScript-applicaties waar deze crawler niet doorheen komt.
-Loop dat kanaal dus niet alleen machinaal na.
+bekendmakingen. Ingekomen brieven van inwoners en hun bijlagen zijn precies waar het in
+de praktijk misgaat. Elk RIS-product werkt anders, en sommige zijn JavaScript-apps waar
+de crawler niet doorheen komt — daarvoor zijn deze connectors. Een connector die niet kan
+draaien **faalt luid** en wordt als 'niet uitgevoerd' gemeld; een lege uitkomst betekent
+hier dus nooit vanzelf 'schoon'.
 
 Overige vlaggen:
 
@@ -228,6 +253,7 @@ avg_scan.py            CLI + orkestratie (ingest → analyse → rapport)
 config.example.yaml    voorbeeldconfig
 avgscan/
   config.py            config laden/normaliseren
+  bronnen.py           connector-registry (sru/crawl/openraadsinformatie/notubiz/parlaeus/ibabs)
   sru.py               ingest via de KOOP SRU-API (bekendmakingen)
   crawl.py             beleefde crawler (robots.txt, rate limit, domeinfilter)
   fetch.py             download + sha256 (dedup, groottelimiet)

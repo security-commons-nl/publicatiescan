@@ -10,8 +10,14 @@ from urllib.parse import urlparse
 # snel bevraagt (gezien 14-07-2026: 148 documenten stil overgeslagen in de eerste etappe).
 # Een overgeslagen document is een gat in de controle; dat mag niet stil gebeuren.
 _TIJDELIJK = {429, 500, 502, 503, 504}
-_BACKOFF = [5, 15, 45, 120]      # seconden per poging; daarna opgeven
-_MAX_WACHT = 300.0               # bovengrens voor een Retry-After van de server
+# Netwerkhapering of serverfout: kort opnieuw proberen.
+_BACKOFF = [5, 15, 45, 120]
+# Afgeknepen worden (429) is iets anders dan een hapering: dan zit je aan een quotum en heeft
+# snel opnieuw proberen geen zin. Eerst vijf minuten afkoelen, daarna langer. Bewust gecapt op
+# een kwartier: een pauze van een uur kost meer werktijd dan hij oplevert, en de statusdatabase
+# hervat toch bij een volgende run.
+_BACKOFF_QUOTA = [300, 600, 900, 900]
+_MAX_WACHT = 900.0               # bovengrens voor een Retry-After van de server
 
 
 def _retry_after(response) -> float | None:
@@ -24,12 +30,14 @@ def _retry_after(response) -> float | None:
         return None
 
 
-def download(session, url: str, dest_dir: str, max_mb: int, timeout: int, retries: int = 4):
+def download(session, url: str, dest_dir: str, max_mb: int, timeout: int, retries: int = 4,
+             melden=None):
     """Return (local_path, sha256), of (None, reden) als het document niet te halen is.
 
     Bij een tijdelijke fout (429/5xx) wordt met backoff opnieuw geprobeerd, waarbij een
-    Retry-After van de server voorrang heeft. Pas als ook de laatste poging faalt, komt het
-    document als 'skipped' in de status — zichtbaar, niet stil.
+    Retry-After van de server voorrang heeft. Een 429 (quotum) krijgt een veel langere
+    afkoelperiode dan een gewone hapering. Pas als ook de laatste poging faalt, komt het
+    document als 'skipped' in de status: zichtbaar, niet stil.
     """
     for poging in range(retries + 1):
         local, reden, wacht = _poging(session, url, dest_dir, max_mb, timeout)
@@ -37,8 +45,12 @@ def download(session, url: str, dest_dir: str, max_mb: int, timeout: int, retrie
             return local, reden
         if wacht is None or poging == retries:
             return None, reden          # harde fout (404, te groot, kapot) of pogingen op
-        # Oplopend wachten, maar nooit korter dan wat de server zelf vraagt.
-        time.sleep(max(wacht, _BACKOFF[min(poging, len(_BACKOFF) - 1)]))
+        schema = _BACKOFF_QUOTA if reden == "http 429" else _BACKOFF
+        pauze = max(wacht, schema[min(poging, len(schema) - 1)])
+        if melden:
+            melden(f"afgeknepen ({reden}), {pauze/60:.0f} min afkoelen "
+                   f"(poging {poging + 1}/{retries})")
+        time.sleep(pauze)
     return None, "onbereikbaar na retries"
 
 
@@ -51,7 +63,8 @@ def _poging(session, url: str, dest_dir: str, max_mb: int, timeout: int):
         with session.get(url, stream=True, timeout=timeout, allow_redirects=True) as r:
             if r.status_code != 200:
                 if r.status_code in _TIJDELIJK:
-                    wacht = _retry_after(r) or _BACKOFF[0]
+                    basis = _BACKOFF_QUOTA[0] if r.status_code == 429 else _BACKOFF[0]
+                    wacht = _retry_after(r) or basis
                     return None, f"http {r.status_code}", wacht
                 return None, f"http {r.status_code}", None
 
@@ -60,7 +73,9 @@ def _poging(session, url: str, dest_dir: str, max_mb: int, timeout: int):
                 return None, f"te groot ({int(clen)//1024//1024} MB)", None
 
             h = hashlib.sha256()
-            tmp = os.path.join(dest_dir, "_partial.tmp")
+            # Per proces een eigen tijdelijk bestand: bij parallelle runs vechten ze anders om
+            # hetzelfde pad (WinError 32) en klappen ze allemaal.
+            tmp = os.path.join(dest_dir, f"_partial-{os.getpid()}.tmp")
             size = 0
             with open(tmp, "wb") as f:
                 for chunk in r.iter_content(chunk_size=65536):
