@@ -227,17 +227,30 @@ def _notubiz(bron, session, cfg):
 
 
 def _parlaeus(bron, session, cfg):
-    # Geverifieerd 14-07-2026: platform Qualigraf == Parlaeus (zelfde app, twee domeinen).
-    # API-basis gevonden: https://<gemeente>.parlaeus.nl/vji/public/<module>/action=<actie>,
-    # publieke acties: moduledata (schema), datalist, detaildata. `moduledata` geeft JSON;
-    # het exacte parameterformaat van `datalist` (pad-stijl, geen query-string) is nog niet
-    # vastgelegd. Bovendien staat robots.txt op Disallow: / — draaien mag pas ná crawl-akkoord
-    # en na SOC/leverancier informeren. Tot dan luid falen i.p.v. stil niets vinden.
+    # Reverse-engineering-stand 14-07-2026 (Qualigraf == Parlaeus, zelfde app, twee domeinen):
+    #   * sessie:   GET /vji/general/session/action=moduledata  (zet cookie ek_session)
+    #   * basis:    https://<gemeente>.parlaeus.nl/vji/public/<module>/action=<actie>
+    #               pad-stijl parameters, bv. .../action=detaildata/gd=<hexkey>
+    #   * publieke data loopt via de MODULE 'homepage', NIET via 'calendar2' — de agenda
+    #     is publiek uitgezet (calendar_show_public=false), dus calendar2/datalist geeft {}.
+    #   * GET /vji/public/homepage/action=detaildata -> events met 'hexkey' (toekomst) en
+    #     'past_tab' met 'agenda_hexkey' (afgeronde vergaderingen).
+    #   * publieke modules (uit /vji/public/menu/action=datalist): Calendar, agenda, Motie,
+    #     Toezegging, Postin (ingekomen stukken = grootste risico), Question, Dossier,
+    #     PublicDocument, Verordening, CouncilPeriod.
+    # ONTBREKENDE SCHAKEL: het URL-modulesegment + actie om van een agenda_hexkey naar de
+    #   document/bijlage-URL's te gaan. De menu-'name' (bv. "agenda") is NIET het URL-segment
+    #   (geeft 404). Dit is headless niet te triggeren; het vergt het afvangen van de XHR uit
+    #   een echte sessie die een afgeronde agenda opent (bv. puppeteer op het eigen Chrome).
+    # LET OP: robots.txt = Disallow: / -> draaien mag pas ná crawl-akkoord + SOC/leverancier
+    #   informeren. Tot de schakel én het akkoord er zijn: luid falen, nooit stil niets vinden.
     raise BronNietGereed(
-        "parlaeus/qualigraf-connector nog niet af: API-basis is bekend "
-        "(/vji/public/<module>/action=datalist|detaildata), maar het parameterformaat van "
-        "'datalist' moet nog worden vastgelegd. LET OP: robots.txt = Disallow: /, dus draaien "
-        "vereist eerst crawl-akkoord + SOC/leverancier informeren.")
+        "parlaeus/qualigraf-connector nog niet af. Bekend: sessie + API-basis "
+        "(/vji/public/homepage/action=detaildata geeft vergaderingen met agenda_hexkey). "
+        "Ontbreekt: het module-segment om een agenda_hexkey naar document-URL's te resolven "
+        "(vang die XHR uit een echte sessie af). LET OP: robots.txt = Disallow: /, dus draaien "
+        "vereist eerst crawl-akkoord + SOC/leverancier informeren. "
+        "Tip: Open Raadsinformatie dekt dit RIS al voor veel gemeenten — probeer 'openraadsinformatie'.")
     yield  # pragma: no cover
 
 
