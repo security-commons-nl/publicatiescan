@@ -154,6 +154,20 @@ def test_zaaknummer_met_geldige_elfproef_wordt_afgewaardeerd():
     assert treffers[0].ernst == LAAG
 
 
+def test_btw_nummer_is_geen_bsn():
+    # BTW/RSIN gebruiken dezelfde 11-proef als BSN (gevonden in de RIS-scan 14-07-2026).
+    treffers = soorten("KvK: 12345678 BTW nr.: 111222333B01 Geachte raden", "bsn")
+    assert len(treffers) == 1
+    assert treffers[0].ernst == LAAG
+
+
+def test_letter_geprefixt_kenmerk_is_geen_bsn():
+    # "Kenmerk U20250024" — letter direct vóór de reeks (RIS-scan 14-07-2026).
+    treffers = soorten("Datum 1 juli 2026 Kenmerk U111222333 Lbr. 26/019", "bsn")
+    assert len(treffers) == 1
+    assert treffers[0].ernst == LAAG
+
+
 def test_echt_bsn_blijft_kritiek_ondanks_woord_nummer():
     # "burgerservicenummer" mag NIET als kenmerk-prefix worden gelezen.
     treffers = soorten("Burgerservicenummer: 111222333 van aanvrager", "bsn")

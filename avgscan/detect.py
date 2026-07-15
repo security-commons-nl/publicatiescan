@@ -157,7 +157,8 @@ def _is_eigen_domein(adres: str) -> bool:
 # raakt kwijt, de triagelijst blijft schoon.
 _KENMERK_PREFIX_RE = re.compile(
     r"(?:"
-    r"[A-Za-z]{2,8}[-/](?:\d{2,4}[-/])?"          # PZH-2010- · Z- · UIT-2019-
+    r"[A-Za-z]{1,8}[-/](?:\d{2,4}[-/])?"          # PZH-2010- · Z- · UIT-2019-
+    r"|[A-Za-z]"                                  # letter direct vóór de reeks: U20250024 · B23
     r"|(?:zaak|dossier|registratie|besluit|document|kenmerk|corsa|olo)"
     r"\s*(?:nummer|nr\.?|kenmerk)?\s*[:\-]?\s*"   # zaaknummer: · ons kenmerk -
     r")$",
@@ -165,13 +166,18 @@ _KENMERK_PREFIX_RE = re.compile(
 )
 # Staat er een BSN-term vlakbij, dan is het wél een BSN — die wint van het kenmerk-filter.
 _BSN_TERM_RE = re.compile(r"\b(?:bsn|burgerservicenummer|sofinummer|sofi-nummer)\b", re.IGNORECASE)
+# BTW-/RSIN-/KvK-nummers gebruiken dezelfde 11-proef als een BSN maar zijn géén BSN. Staat
+# zo'n term vlakbij, dan is de reeks een bedrijfsnummer (gevonden 14-07-2026: "BTW nr.: ...B01").
+_ZAKELIJK_NR_RE = re.compile(r"\b(?:btw|rsin|kvk|ob[- ]?nummer|omzetbelasting|vat)\b", re.IGNORECASE)
 
 
 def _is_kenmerk(text: str, start: int) -> bool:
-    """Wordt de cijferreeks direct voorafgegaan door een zaak-/besluitkenmerk?"""
-    prefix = text[max(0, start - 40):start]
+    """Is de cijferreeks een kenmerk of bedrijfsnummer i.p.v. een BSN?"""
     if _BSN_TERM_RE.search(text[max(0, start - 60):start]):
-        return False
+        return False                                          # expliciet BSN -> wint altijd
+    prefix = text[max(0, start - 40):start]
+    if _ZAKELIJK_NR_RE.search(text[max(0, start - 25):start + 15]):
+        return True                                           # BTW/RSIN/KvK in de buurt
     return bool(_KENMERK_PREFIX_RE.search(prefix))
 
 
