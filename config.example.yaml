@@ -50,10 +50,13 @@ gemeenten:
 #   openraadsinformatie werkend  — raadsinformatie via de landelijke Elasticsearch-API;
 #                                  de tekst is daar al geëxtraheerd (snel, geen download).
 #                                  Dekking en actualiteit verschillen per gemeente.
-#   notubiz             deels    — nog niet af (enumeratie van document-id's); faalt luid
-#   parlaeus / qualigraf deels   — zelfde platform; API-basis bekend, nog niet af; faalt luid.
+#   parlaeus / qualigraf werkend — zelfde platform; enumereert de publieke modules en haalt
+#                                  de bijlagen op. Met van/tot scan je de volledige historie.
 #                                  LET OP: robots.txt = Disallow: / → alleen ná crawl-akkoord.
-#   ibabs               skelet   — vereist sitename + API-sleutel; faalt luid zonder credentials
+#   notubiz             deels    — nog niet af (enumeratie van document-id's); faalt luid.
+#                                  Bouwplan staat in de README.
+#   ibabs               skelet   — vereist sitename + API-sleutel; faalt luid zonder credentials.
+#                                  Bouwplan staat in de README.
 #
 # Een connector die niet kan draaien faalt LUID en wordt als 'niet uitgevoerd' gemeld —
 # nooit stil als 'niets gevonden'. Een lege uitkomst mag nooit 'schoon' betekenen.
@@ -68,8 +71,10 @@ bronnen:
   #   type: openraadsinformatie
   #   gemeenten: [Jouwgemeente]        # moet als ori_<gemeente>-index bestaan, anders faalt het luid
   #
-  # - naam: raadsinformatie-eigen-RIS   # Qualigraf/Parlaeus — nog niet af; robots Disallow
+  # - naam: raadsinformatie-eigen-RIS   # Qualigraf/Parlaeus — werkend; robots Disallow: /
   #   type: qualigraf
+  #   van: 2010                        # optioneel: itereer de jaren voor de volledige historie
+  #   tot: 2026
   #   sites:
   #     - { gemeente: Jouwgemeente, host: jouwgemeente.parlaeus.nl }
   #   negeer_robots: false             # pas true ná crawl-akkoord + SOC/leverancier informeren

@@ -157,9 +157,9 @@ De beschikbare types:
 | `sru` | officiële bekendmakingen (KOOP-API) | werkend |
 | `crawl` | HTML-crawl van je eigen website/portalen | werkend |
 | `openraadsinformatie` | raadsinformatie via de landelijke Elasticsearch-API; **de tekst is daar al geëxtraheerd**, dus geen download en snel. Dezelfde bron die de VNG voor haar tweede lijst gebruikt. Dekking en actualiteit verschillen per gemeente | werkend |
-| `notubiz` | raadsinformatie Notubiz | nog niet af — faalt luid |
-| `parlaeus` / `qualigraf` | raadsinformatie Qualigraf/Parlaeus (**zelfde platform**). API-basis bekend, enumeratie nog niet af. `robots.txt` = `Disallow: /`, dus draaien mag pas ná crawl-akkoord + SOC/leverancier informeren | nog niet af — faalt luid |
-| `ibabs` | raadsinformatie iBabs; vereist `sitename` + `api_key` (geen open route) | skelet — faalt luid |
+| `parlaeus` / `qualigraf` | raadsinformatie Qualigraf/Parlaeus (**zelfde platform**, twee domeinen). Enumereert de publieke modules (ingekomen stukken, moties, verordeningen, ...) en haalt de bijlagen op. Met `van`/`tot` scan je de **volledige historie**. `robots.txt` = `Disallow: /`, dus draaien mag pas ná crawl-akkoord + SOC/leverancier informeren | werkend |
+| `notubiz` | raadsinformatie Notubiz | nog niet af — faalt luid ([bouwplan](#bouwen-aan-notubiz-en-ibabs)) |
+| `ibabs` | raadsinformatie iBabs; vereist `sitename` + `api_key` (geen open route) | skelet — faalt luid ([bouwplan](#bouwen-aan-notubiz-en-ibabs)) |
 
 Let op: **het raadsinformatiesysteem is empirisch het grootste risico**, niet de
 bekendmakingen. Ingekomen brieven van inwoners en hun bijlagen zijn precies waar het in
@@ -167,6 +167,41 @@ de praktijk misgaat. Elk RIS-product werkt anders, en sommige zijn JavaScript-ap
 de crawler niet doorheen komt — daarvoor zijn deze connectors. Een connector die niet kan
 draaien **faalt luid** en wordt als 'niet uitgevoerd' gemeld; een lege uitkomst betekent
 hier dus nooit vanzelf 'schoon'.
+
+### Bouwen aan Notubiz en iBabs
+
+Twee connectors zijn nog niet af. Gebruikt jouw gemeente Notubiz of iBabs, dan is dit
+je startpunt — het patroon staat in `avgscan/bronnen.py`: een connector is een generator
+die `Document`-objecten `yield`t (elk met een `url` om te downloaden, óf directe `text`/
+`chunks`), en die **luid faalt** (`raise BronNietGereed(...)`) zodra hij niet kan draaien.
+Kijk naar `_parlaeus` als werkend voorbeeld: eerst de lijst-endpoint enumereren, dan per
+item de bijlagen ophalen. Een PR is welkom.
+
+**Notubiz** — het dichtst bij af. Het downloaden van één document is al geverifieerd
+(`GET https://api.notubiz.nl/document/<id>/1` → `application/pdf`). Wat nog ontbreekt is
+de **enumeratie** van alle document-id's per gemeente:
+
+1. Zoek de organisatie-id van je gemeente op (`api.notubiz.nl/organisations`).
+2. Loop de events/agenda's af (`/events?organisation_id=<id>`, gepagineerd op datum) en
+   verzamel per event de gekoppelde document-id's uit de agendapunten en bijlagen.
+3. `yield Document(bron=naam, url="https://api.notubiz.nl/document/<id>/1", ext="pdf")`.
+4. Voeg een `van`/`tot`-datumvenster toe, net als bij `_parlaeus`, voor de volledige historie.
+
+> Sneller alternatief: **Open Raadsinformatie ingest Notubiz al**. Probeer eerst het type
+> `openraadsinformatie` — dan hoef je deze connector misschien niet te bouwen.
+
+**iBabs** — geen open publieke route. Toegang loopt via de iBabs-API (`api.ibabs.eu`) met
+een **sitename + API-sleutel per gemeente**, die je bij je iBabs-beheerder opvraagt. De
+skelet-connector faalt luid zolang die credentials ontbreken. Bouwstappen zodra je ze hebt:
+
+1. Authenticeer met `sitename` + `api_key` uit de bronconfig.
+2. Enumereer de vergaderingen (`GetMeetings`, op datumvenster) en per vergadering de
+   documenten/bijlagen (`GetMeeting` → documentreferenties).
+3. `yield Document(...)` met de download-URL of, als de API bytes teruggeeft, met `text`.
+
+Voor beide geldt: een module/endpoint die niets teruggeeft mag je stil overslaan
+('niet aanwezig'), maar een connector die zijn werk niet kán doen moet **luid falen** —
+nooit stil een lege lijst, want dat leest als 'schoon'.
 
 Overige vlaggen:
 
