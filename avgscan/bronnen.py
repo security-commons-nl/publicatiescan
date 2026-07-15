@@ -226,32 +226,90 @@ def _notubiz(bron, session, cfg):
     yield  # pragma: no cover  (maakt dit een generator)
 
 
+_DOC_EXT = (".pdf", ".docx", ".doc", ".xlsx", ".xls", ".xlsm", ".pptx", ".ppt")
+# Publieke modules van Qualigraf/Parlaeus die documenten bevatten. Postin = ingekomen
+# stukken van inwoners, empirisch het grootste risico. Niet elke gemeente heeft alle
+# modules aanstaan; een module die 404/geen lijst geeft, wordt stil overgeslagen (dat is
+# hier terecht: 'niet aanwezig', niet 'niets gevonden').
+_QG_MODULES = ["postin", "dossier", "question", "motie", "toezegging", "verordening",
+               "publicdocument", "raadsbesluit"]
+
+
+def _qg_doclinks(obj, out):
+    """Loop een detaildata-JSON af en verzamel alle document-download-links.
+
+    Publieke Qualigraf-documenten zitten in 'link'-velden als
+    /vji/public/<module>/action=showdoc|showannex/.../bestand.pdf (geverifieerd 14-07-2026).
+    """
+    if isinstance(obj, dict):
+        link = obj.get("link")
+        if (isinstance(link, str) and ("action=showdoc" in link or "action=showannex" in link)
+                and link.lower().rsplit("?", 1)[0].endswith(_DOC_EXT)):
+            out.append(link)
+        for v in obj.values():
+            _qg_doclinks(v, out)
+    elif isinstance(obj, list):
+        for v in obj:
+            _qg_doclinks(v, out)
+
+
 def _parlaeus(bron, session, cfg):
-    # Reverse-engineering-stand 14-07-2026 (Qualigraf == Parlaeus, zelfde app, twee domeinen):
-    #   * sessie:   GET /vji/general/session/action=moduledata  (zet cookie ek_session)
-    #   * basis:    https://<gemeente>.parlaeus.nl/vji/public/<module>/action=<actie>
-    #               pad-stijl parameters, bv. .../action=detaildata/gd=<hexkey>
-    #   * publieke data loopt via de MODULE 'homepage', NIET via 'calendar2' — de agenda
-    #     is publiek uitgezet (calendar_show_public=false), dus calendar2/datalist geeft {}.
-    #   * GET /vji/public/homepage/action=detaildata -> events met 'hexkey' (toekomst) en
-    #     'past_tab' met 'agenda_hexkey' (afgeronde vergaderingen).
-    #   * publieke modules (uit /vji/public/menu/action=datalist): Calendar, agenda, Motie,
-    #     Toezegging, Postin (ingekomen stukken = grootste risico), Question, Dossier,
-    #     PublicDocument, Verordening, CouncilPeriod.
-    # ONTBREKENDE SCHAKEL: het URL-modulesegment + actie om van een agenda_hexkey naar de
-    #   document/bijlage-URL's te gaan. De menu-'name' (bv. "agenda") is NIET het URL-segment
-    #   (geeft 404). Dit is headless niet te triggeren; het vergt het afvangen van de XHR uit
-    #   een echte sessie die een afgeronde agenda opent (bv. puppeteer op het eigen Chrome).
-    # LET OP: robots.txt = Disallow: / -> draaien mag pas ná crawl-akkoord + SOC/leverancier
-    #   informeren. Tot de schakel én het akkoord er zijn: luid falen, nooit stil niets vinden.
-    raise BronNietGereed(
-        "parlaeus/qualigraf-connector nog niet af. Bekend: sessie + API-basis "
-        "(/vji/public/homepage/action=detaildata geeft vergaderingen met agenda_hexkey). "
-        "Ontbreekt: het module-segment om een agenda_hexkey naar document-URL's te resolven "
-        "(vang die XHR uit een echte sessie af). LET OP: robots.txt = Disallow: /, dus draaien "
-        "vereist eerst crawl-akkoord + SOC/leverancier informeren. "
-        "Tip: Open Raadsinformatie dekt dit RIS al voor veel gemeenten — probeer 'openraadsinformatie'.")
-    yield  # pragma: no cover
+    """Qualigraf/Parlaeus (zelfde platform). Raadsinformatie via de publieke /vji/-API.
+
+    Flow (geverifieerd 14-07-2026, cookieless):
+      1. per module: GET /vji/public/<module>/action=datalist/  -> items met 'hexkey'
+      2. per item:   GET /vji/public/<module>/action=detaildata/gd=<hexkey>  -> 'link'-velden
+                     met showdoc/showannex-document-URL's
+      3. die URL's gaan de download-pijplijn in (download + tekstlaag + detectie).
+
+    LET OP: robots.txt van dit platform staat op Disallow: /. Draaien op een productie-RIS
+    hoort pas ná afstemming met SOC en leverancier; die afweging ligt bij de opdrachtgever,
+    niet in de code. De connector draait alleen als hij expliciet geconfigureerd is.
+    """
+    import time
+
+    sites = bron.get("sites") or []
+    if not sites:
+        raise BronNietGereed(
+            "parlaeus/qualigraf vereist 'sites': lijst van {gemeente, host}, "
+            "bv. {gemeente: X, host: x.parlaeus.nl}")
+    naam = bron.get("naam", "qualigraf")
+    modules = bron.get("modules") or _QG_MODULES
+
+    for site in sites:
+        host = site.get("host") or f"{site.get('gemeente', '').strip().lower()}.parlaeus.nl"
+        base = f"https://{host}/vji/public"
+        # sessie (niet strikt nodig — API is cookieless — maar netjes en toekomstvast)
+        try:
+            session.get(f"https://{host}/vji/general/session/action=moduledata",
+                        timeout=cfg.timeout_seconds)
+        except Exception:
+            pass
+        for module in modules:
+            try:
+                r = session.get(f"{base}/{module}/action=datalist/", timeout=cfg.timeout_seconds)
+                data = r.json()
+            except Exception:
+                continue                     # module niet aanwezig/aan -> terecht overslaan
+            rows = data if isinstance(data, list) else data.get("rows", data.get("data", []))
+            for row in rows:
+                hexkey = row.get("hexkey") or row.get("gd")
+                if not hexkey:
+                    continue
+                try:
+                    det = session.get(f"{base}/{module}/action=detaildata/gd={hexkey}",
+                                      timeout=cfg.timeout_seconds).json()
+                except Exception:
+                    continue
+                links = []
+                _qg_doclinks(det, links)
+                for link in links:
+                    url = link if link.startswith("http") else f"https://{host}{link}"
+                    ext = url.lower().rsplit("?", 1)[0].rsplit(".", 1)[-1]
+                    yield Document(bron=naam, url=url, ext=ext,
+                                   titel=row.get("subject", row.get("title", "")))
+                if cfg.delay_seconds:
+                    time.sleep(cfg.delay_seconds)
 
 
 def _ibabs(bron, session, cfg):

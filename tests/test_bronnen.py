@@ -40,10 +40,27 @@ def test_notubiz_faalt_luid():
         _draai(CONNECTORS["notubiz"], {"type": "notubiz", "naam": "n"})
 
 
-def test_parlaeus_faalt_luid_met_robots_waarschuwing():
+def test_parlaeus_zonder_sites_faalt_luid():
     with pytest.raises(BronNietGereed) as e:
         _draai(CONNECTORS["parlaeus"], {"type": "parlaeus"})
-    assert "robots" in str(e.value).lower()
+    assert "sites" in str(e.value).lower()
+
+
+def test_qg_doclinks_vindt_showdoc_en_showannex():
+    # Detaildata-structuur zoals Qualigraf die publiek teruggeeft.
+    detail = [
+        {"label": "Titel",
+         "link": "/vji/public/postin/action=showdoc/gd=abc/rapport.pdf", "type": "title"},
+        {"label": "Documenttype", "text": "Raadsvoorstel"},   # geen link
+        {"table": {"data": [
+            {"title": {"link": "/vji/public/postin/action=showannex/gdb=def/bijlage.pdf"}}]}},
+        {"link": "/vji/public/postin/action=detaildata/gd=xyz"},   # geen document -> negeren
+    ]
+    links = []
+    bronnen._qg_doclinks(detail, links)
+    assert "/vji/public/postin/action=showdoc/gd=abc/rapport.pdf" in links
+    assert "/vji/public/postin/action=showannex/gdb=def/bijlage.pdf" in links
+    assert len(links) == 2      # de detaildata-link (geen showdoc/showannex, geen .pdf) telt niet
 
 
 def test_ibabs_vereist_credentials():
