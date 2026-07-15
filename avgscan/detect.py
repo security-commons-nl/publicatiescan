@@ -164,21 +164,61 @@ _KENMERK_PREFIX_RE = re.compile(
     r")$",
     re.IGNORECASE,
 )
-# Staat er een BSN-term vlakbij, dan is het wél een BSN — die wint van het kenmerk-filter.
+# Staat er een BSN-term vlakbij, dan is het wél een BSN — die wint van alle ruis-filters.
 _BSN_TERM_RE = re.compile(r"\b(?:bsn|burgerservicenummer|sofinummer|sofi-nummer)\b", re.IGNORECASE)
 # BTW-/RSIN-/KvK-nummers gebruiken dezelfde 11-proef als een BSN maar zijn géén BSN. Staat
-# zo'n term vlakbij, dan is de reeks een bedrijfsnummer (gevonden 14-07-2026: "BTW nr.: ...B01").
-_ZAKELIJK_NR_RE = re.compile(r"\b(?:btw|rsin|kvk|ob[- ]?nummer|omzetbelasting|vat)\b", re.IGNORECASE)
+# zo'n term vlakbij, dan is de reeks een bedrijfsnummer (gevonden 14-07-2026: "Btwnr NL ...B01").
+# Let op: 'btw' zonder \b-suffix zodat 'Btwnr' en 'BTWnummer' óók matchen.
+_ZAKELIJK_NR_RE = re.compile(r"\bbtw|\b(?:rsin|kvk|omzetbelasting|vat)\b|\bob[- ]?nummer\b", re.IGNORECASE)
+
+# --- Structurele ruis-signalen rond een elfproef-geldige reeks (RIS-scan 15-07-2026) ---
+# Deze vijf categorieën leverden alle 63 valse Kritiek-hits in de volledige RIS-historie:
+# telefoonnummers, BTW-nummers, geldbedragen, referentie-/kenmerknummers en getallentabellen.
+# Een telefoon-context vlak vóór de reeks: een +31/0031-landcode of een tel/fax/mobiel-term.
+_TEL_NABIJ_RE = re.compile(
+    r"\+\s?31|00\s?31|\b(?:tel|fax|telefoon(?:nummer)?|mobiel|gsm)\b", re.IGNORECASE)
+_BTW_VOOR_RE = re.compile(r"\bnl\s?$", re.IGNORECASE)                   # 'NL' direct vóór de 9 cijfers
+_BTW_NA_RE = re.compile(r"^\s?b\d{2}\b", re.IGNORECASE)                 # 'B01' direct erna
+_BEDRAG_VOOR_RE = re.compile(r"(?:€|eur|euro)\s*$", re.IGNORECASE)      # € / EUR ervoor
+_BEDRAG_NA_RE = re.compile(r"^\s?,-|^[.,]\d{2}(?!\d)")                  # ,-  of  ,00  erna
+_DUIZENDTAL_RE = re.compile(r"\d{1,3}(?:\.\d{3}){2,}")                  # 1.234.567 in de match zelf
+_REF_NA_RE = re.compile(r"^[A-Za-z/]")                                  # letter of '/' direct erna
 
 
-def _is_kenmerk(text: str, start: int) -> bool:
-    """Is de cijferreeks een kenmerk of bedrijfsnummer i.p.v. een BSN?"""
+def _is_getaltabel(text: str, start: int, end: int) -> bool:
+    """Zit de reeks in een dichte getallenreeks (bedragen-/cijfertabel, of OCR-tabelruis)?"""
+    w = text[max(0, start - 35):end + 35]
+    digits = sum(c.isdigit() for c in w)
+    letters = sum(c.isalpha() for c in w)
+    # Bedragen-/cijfertabel met decimaaltekens.
+    if digits >= 12 and letters <= digits * 0.25 and ("," in w or "%" in w or w.count(".") >= 2):
+        return True
+    # Pure getallentabel zonder decimaaltekens (spaties, '+', 't/m' als scheiding): heel
+    # veel cijfers, nauwelijks letters (LLPG-bijlagen, 15-07-2026).
+    return digits >= 18 and letters <= digits * 0.15
+
+
+def _bsn_reden(text: str, start: int, end: int, matched: str) -> str:
+    """Reden waarom een elfproef-geldige reeks tóch geen BSN is, of '' als het een BSN kan zijn.
+
+    Een expliciete BSN-term vlakbij wint altijd: dan is het wél een BSN en geven we '' terug.
+    """
     if _BSN_TERM_RE.search(text[max(0, start - 60):start]):
-        return False                                          # expliciet BSN -> wint altijd
-    prefix = text[max(0, start - 40):start]
-    if _ZAKELIJK_NR_RE.search(text[max(0, start - 25):start + 15]):
-        return True                                           # BTW/RSIN/KvK in de buurt
-    return bool(_KENMERK_PREFIX_RE.search(prefix))
+        return ""                                             # expliciet BSN -> wint altijd
+    voor = text[max(0, start - 40):start]
+    na = text[end:end + 8]
+    if voor.rstrip().endswith("+") or _TEL_NABIJ_RE.search(text[max(0, start - 25):start]):
+        return "onderdeel van een telefoonnummer — geen BSN"
+    if (_BTW_VOOR_RE.search(voor) and _BTW_NA_RE.search(na)) \
+            or _ZAKELIJK_NR_RE.search(text[max(0, start - 25):end + 6]):
+        return "onderdeel van een BTW-/RSIN-/KvK-nummer — geen BSN"
+    if _BEDRAG_VOOR_RE.search(voor) or _BEDRAG_NA_RE.search(na) or _DUIZENDTAL_RE.search(matched):
+        return "onderdeel van een geldbedrag — geen BSN"
+    if _REF_NA_RE.match(na) or _KENMERK_PREFIX_RE.search(voor):
+        return "onderdeel van een zaak-/besluit-/referentiekenmerk — vrijwel zeker geen BSN"
+    if _is_getaltabel(text, start, end):
+        return "cijfer uit een getallentabel — geen BSN"
+    return ""
 
 
 def _find_bsn(text, loc, out):
@@ -186,11 +226,11 @@ def _find_bsn(text, loc, out):
         digits = re.sub(r"[ .]", "", m.group(1))
         if not is_valid_bsn(digits):
             continue
-        if _is_kenmerk(text, m.start()):
+        reden = _bsn_reden(text, m.start(), m.end(), m.group(1))
+        if reden:
             out.append(Finding("BSN", LAAG, digits, loc,
                                _snippet(text, m.start(), m.end(), m.group(1)),
-                               "elfproef-geldig, maar onderdeel van een zaak-/besluitkenmerk "
-                               "— vrijwel zeker geen BSN"))
+                               "elfproef-geldig, maar " + reden))
             continue
         out.append(Finding("BSN", KRITIEK, digits, loc,
                            _snippet(text, m.start(), m.end(), m.group(1)),

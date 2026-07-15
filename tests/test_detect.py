@@ -179,3 +179,30 @@ def test_los_bsn_zonder_prefix_blijft_kritiek():
     treffers = soorten("Aanvrager 111222333 woont in Leiden", "bsn")
     assert len(treffers) == 1
     assert treffers[0].ernst == KRITIEK
+
+
+# De vijf ruis-categorieën uit de volledige RIS-historie (15-07-2026): elk leverde valse
+# Kritiek-hits omdat een 9-cijferige reeks de elfproef toevallig doorstond.
+@pytest.mark.parametrize("tekst,brok", [
+    ("Fax +31 (070) 111222333 Den Haag", "telefoon"),             # internationaal telefoonnummer
+    ("Telefoon 111222333, voor vragen", "telefoon"),              # tel-term ervoor
+    ("Btwnr NL 111222333B01 IBAN NL..", "BTW"),                   # 'Btwnr' zonder spatie
+    ("BTWnummer: 111222333B01 Geachte", "BTW"),                   # 'BTWnummer' zonder spatie
+    ("subsidie van € 111222333 voor het", "geldbedrag"),          # bedrag met euroteken
+    ("bedraagt 111222333,- voor 2025", "geldbedrag"),             # bedrag met ,- erna
+    ("Accountantsverslag 111222333B9C8C/JV/3", "referentiekenmerk"),  # referentie met letter erna
+    ("zie arXiv:111222333v1 voor de", "referentiekenmerk"),       # arXiv-id (letter erna)
+])
+def test_bsn_ruis_wordt_afgewaardeerd(tekst, brok):
+    treffers = [t for t in soorten(tekst, "bsn") if t.soort == "BSN"]
+    assert len(treffers) == 1
+    assert treffers[0].ernst == LAAG
+    assert brok in treffers[0].opmerking
+
+
+def test_getallentabel_geen_kritieke_bsn():
+    # Dichte cijferreeks (bedragen-/cijfertabel) — geen los persoonsgegeven. De komma direct
+    # achter de reeks isoleert 'm (anders slokt de spatie-tolerante regex het buurgetal op).
+    tekst = "88,1, 111222333, 90,9, 41,9, 120,7, 154,5, 131,7, 119,2"
+    treffers = [t for t in soorten(tekst, "bsn") if t.soort == "BSN"]
+    assert treffers and all(t.ernst == LAAG for t in treffers)
