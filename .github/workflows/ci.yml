@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Standaard Python-tests via de herbruikbare workflow in security-commons-nl/.github.
+  # Deze suite is geen formaliteit: de detector waardeert ruis af naar Laag, en één
+  # verkeerd afgestelde regex duwt een echt BSN stilletjes uit de triagelijst. Dat is
+  # onzichtbaar in het rapport, want dat meldt dan simpelweg niets.
+  tests:
+    uses: security-commons-nl/.github/.github/workflows/python-ci.yml@main
+    with:
+      python-version: "3.12"
+      test-command: "pytest tests/ -v"
+
+  # Documentatie-compliance conform DOCUMENTATION-STANDARD.md
+  docs:
+    uses: security-commons-nl/.github/.github/workflows/doc-compliance.yml@main
+    with:
+      require-gebruik: false         # README.md bevat de volledige handleiding
+      require-architectuur: false    # README.md beschrijft de moduleopbouw
+      require-configuratie: false    # README.md + config.example.yaml documenteren de config
