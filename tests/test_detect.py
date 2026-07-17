@@ -200,6 +200,46 @@ def test_bsn_ruis_wordt_afgewaardeerd(tekst, brok):
     assert brok in treffers[0].opmerking
 
 
+# De twee ruis-categorieën uit de volledige bekendmakingen-scan (17-07-2026): alle vier de
+# valse Kritiek-hits over 30.546 documenten kwamen hiervandaan.
+@pytest.mark.parametrize("tekst,brok", [
+    # Een regeling nummert haar artikelen; gmb-2024-536517 leverde er drie.
+    ("wordt gewijzigd: Artikel 111222333 Geur landbouwhuisdieren", "artikelnummer"),
+    ("in afwijking van artikel artikel 111222333, bij het houden van", "artikelnummer"),
+    # Een verkeersbesluit verwijst naar zijn tekening; gmb-2024-338863.
+    ("rijbaan Lammenschansweg Situatietekening: 111222333 Leiden V9", "tekeningnummer"),
+    ("zie Bouwtekening 111222333 voor de maatvoering", "tekeningnummer"),
+])
+def test_bekendmakingen_ruis_wordt_afgewaardeerd(tekst, brok):
+    treffers = [t for t in soorten(tekst, "bsn") if t.soort == "BSN"]
+    assert len(treffers) == 1                     # niet weggegooid...
+    assert treffers[0].ernst == LAAG              # ...maar wel uit de triagelijst
+    assert brok in treffers[0].opmerking
+
+
+def test_artikelnummer_verliest_van_expliciete_bsn_term():
+    # De BSN-term wint altijd: 'artikel' vlakbij mag een echt BSN niet wegfilteren.
+    treffers = [t for t in soorten("Artikel 5 noemt BSN 111222333 van betrokkene", "bsn")
+                if t.soort == "BSN"]
+    assert treffers[0].ernst == KRITIEK
+
+
+# Adviesbureaus nummeren hun rapportbijlagen ook met 'Documentnummer' (17-07-2026:
+# 'Documentnummer: SOB0xxxxx.RAP003, WSP Nederland B.V.' in gmb-2023-390495).
+def test_rapportnummer_is_geen_paspoortnummer():
+    treffers = soorten("Documentnummer: SOB012349.RAP003, WSP Nederland B.V., 2022.",
+                       "paspoort_rijbewijs")
+    assert len(treffers) == 1
+    assert treffers[0].ernst == LAAG
+    assert "rapportbijlage" in treffers[0].opmerking
+
+
+def test_echt_paspoortnummer_blijft_kritiek():
+    treffers = soorten("Legitimatie: paspoortnummer NX1234567 getoond.", "paspoort_rijbewijs")
+    assert len(treffers) == 1
+    assert treffers[0].ernst == KRITIEK
+
+
 def test_getallentabel_geen_kritieke_bsn():
     # Dichte cijferreeks (bedragen-/cijfertabel) — geen los persoonsgegeven. De komma direct
     # achter de reeks isoleert 'm (anders slokt de spatie-tolerante regex het buurgetal op).

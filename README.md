@@ -158,8 +158,17 @@ De beschikbare types:
 | `crawl` | HTML-crawl van je eigen website/portalen | werkend |
 | `openraadsinformatie` | raadsinformatie via de landelijke Elasticsearch-API; **de tekst is daar al geëxtraheerd**, dus geen download en snel. Dezelfde bron die de VNG voor haar tweede lijst gebruikt. Dekking en actualiteit verschillen per gemeente | werkend |
 | `parlaeus` / `qualigraf` | raadsinformatie Qualigraf/Parlaeus (**zelfde platform**, twee domeinen). Enumereert de publieke modules (ingekomen stukken, moties, verordeningen, ...) en haalt de bijlagen op. Met `van`/`tot` scan je de **volledige historie**. `robots.txt` = `Disallow: /`, dus draaien mag pas ná crawl-akkoord + SOC/leverancier informeren | werkend |
+| `mijnpublicaties` | terinzageleggingen op [mijnpublicaties.nl](https://mijnpublicaties.nl) (TerInzageLeggingPortaal), **23 gemeenten aangesloten** waaronder Amsterdam, Haarlem, Breda, Zwolle en Zoetermeer. Geen sleutel, geen login, geen `robots.txt`. Zet `organisatie_naam` (exacte naam op de hoofdpagina) of `organisatie` (GUID uit de portaal-URL) | werkend |
 | `notubiz` | raadsinformatie Notubiz | nog niet af — faalt luid ([bouwplan](#bouwen-aan-notubiz-en-ibabs)) |
 | `ibabs` | raadsinformatie iBabs; vereist `sitename` + `api_key` (geen open route) | skelet — faalt luid ([bouwplan](#bouwen-aan-notubiz-en-ibabs)) |
+
+Over `mijnpublicaties` twee dingen die je moet weten voordat je de uitkomst leest. Het portaal
+toont alleen wat **op dit moment ter inzage ligt**, geen archief: een lege of kleine uitkomst
+betekent "weinig lopende terinzageleggingen", niet "schoon verleden". En veel organisaties
+publiceren er enkel een **samenvatting**; de onderliggende dossierstukken gaan op verzoek en
+zijn dus niet te scannen. Voor historie is `sru` de aangewezen bron. De kracht van deze bron is
+juist preventief: draai hem periodiek en je ziet een probleem *tijdens* de inzagetermijn,
+niet jaren later via een datalekmelding.
 
 Let op: **het raadsinformatiesysteem is empirisch het grootste risico**, niet de
 bekendmakingen. Ingekomen brieven van inwoners en hun bijlagen zijn precies waar het in
@@ -288,7 +297,8 @@ avg_scan.py            CLI + orkestratie (ingest → analyse → rapport)
 config.example.yaml    voorbeeldconfig
 avgscan/
   config.py            config laden/normaliseren
-  bronnen.py           connector-registry (sru/crawl/openraadsinformatie/notubiz/parlaeus/ibabs)
+  bronnen.py           connector-registry (sru/crawl/openraadsinformatie/notubiz/parlaeus/
+                       ibabs/mijnpublicaties)
   sru.py               ingest via de KOOP SRU-API (bekendmakingen)
   crawl.py             beleefde crawler (robots.txt, rate limit, domeinfilter)
   fetch.py             download + sha256 (dedup, groottelimiet)

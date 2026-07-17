@@ -19,6 +19,9 @@ Verificatiestatus van de connectors (14-07-2026, tegen de echte endpoints getest
   notubiz             deels    - document-download geverifieerd, enumeratie nog niet
   parlaeus/qualigraf  deels    - API-basis gevonden (/vji/public/.../action=), enum nog niet
   ibabs               skelet   - vereist sitename + API-sleutel (SOAP), niet publiek
+  mijnpublicaties     werkend  - 17-07-2026: enumeratie + download end-to-end getest op
+                                 Gemeente Leiden; 23 organisaties aangesloten (o.a.
+                                 Amsterdam, Haarlem, Breda, Zwolle, Zoetermeer)
 
 De 'deels'/'skelet'-connectors FALEN LUID (BronNietGereed) i.p.v. stil niets te vinden:
 een lege uitkomst mag nooit als 'schoon' worden gelezen.
@@ -366,6 +369,117 @@ def _ibabs(bron, session, cfg):
 
 
 # --------------------------------------------------------------------------------------
+# Connector: mijnpublicaties.nl (TerInzageLeggingPortaal)
+# --------------------------------------------------------------------------------------
+_MP_BASE = "https://mijnpublicaties.nl"
+
+
+def _mp_organisaties(session, base, cfg):
+    """Naam -> GUID van alle aangesloten organisaties, van de hoofdpagina."""
+    import html as _html
+    import re
+
+    r = session.get(f"{base}/", timeout=cfg.timeout_seconds)
+    out = {}
+    for guid, label in re.findall(
+            r'href="/Organisatie/([0-9a-f-]{36})"[^>]*>(.*?)</a>', r.text, re.S | re.I):
+        naam = _html.unescape(re.sub(r"<[^>]+>", " ", label))
+        naam = re.sub(r"\s+", " ", naam).strip()
+        if naam:
+            out[naam] = guid
+    return out
+
+
+def _mijnpublicaties(bron, session, cfg):
+    """mijnpublicaties.nl (TerInzageLeggingPortaal): stukken die ter inzage liggen.
+
+    Flow (geverifieerd 17-07-2026; cookieless, geen sleutel, geen login):
+      1. GET /Organisatie/<guid>?p=<n>   -> links /Publicatie/<guid>, gepagineerd
+      2. GET /Publicatie/<guid>          -> <li class="document" id="<guid>"> + bestandsnaam
+      3. GET /api-public/document/<guid> -> het bestand zelf
+
+    LET OP - dit portaal toont alleen wat NU ter inzage ligt, geen archief. Een lege of
+    kleine uitkomst betekent 'weinig actuele terinzageleggingen', NIET 'schoon verleden'.
+    Voor historie is de sru-bron (officiële bekendmakingen) de aangewezen weg. Veel
+    organisaties publiceren hier bovendien alleen een samenvatting; de onderliggende
+    dossierstukken gaan op verzoek en zijn dus niet scanbaar.
+
+    Geen robots.txt (404) en geen authenticatie; de endpoint heet /api-public/ en is
+    publiek bedoeld. Politeness volgt cfg.delay_seconds.
+
+    Config:
+        - type: mijnpublicaties
+          naam: "Leiden ter inzage"
+          organisatie: c3c4cefd-0426-4efd-8ea0-08dc45029d80   # GUID uit de portaal-URL
+          # of, in plaats van de GUID:
+          organisatie_naam: "Gemeente Leiden"                 # exacte naam op de hoofdpagina
+    """
+    import re
+
+    base = (bron.get("base_url") or _MP_BASE).rstrip("/")
+    naam = bron.get("naam", "mijnpublicaties")
+    org = bron.get("organisatie")
+
+    if not org and bron.get("organisatie_naam"):
+        gevonden = _mp_organisaties(session, base, cfg)
+        org = gevonden.get(bron["organisatie_naam"])
+        if not org:
+            raise BronNietGereed(
+                f"organisatie {bron['organisatie_naam']!r} staat niet op {base}. "
+                f"Aangesloten: {', '.join(sorted(gevonden)) or '(geen gevonden)'}")
+    if not org:
+        raise BronNietGereed(
+            "mijnpublicaties vereist 'organisatie' (GUID uit de portaal-URL) of "
+            "'organisatie_naam' (exacte naam op de hoofdpagina)")
+
+    max_paginas = int(bron.get("max_paginas", 200))
+    gezien_pub, gezien_doc = set(), set()
+
+    # De paginering is 1-based; het portaal linkt zelf naar ?p=0 maar antwoordt daarop
+    # met HTTP 500. Daarom starten we bij 1 en stoppen we bij de eerste lege pagina.
+    for p in range(1, max_paginas + 1):
+        try:
+            r = session.get(f"{base}/Organisatie/{org}?p={p}", timeout=cfg.timeout_seconds)
+        except Exception as e:
+            raise BronNietGereed(f"organisatie-overzicht niet op te halen: {e}") from e
+        if getattr(r, "status_code", 200) >= 400:
+            break
+        nieuw = [g for g in dict.fromkeys(re.findall(r"/Publicatie/([0-9a-f-]{36})", r.text))
+                 if g not in gezien_pub]
+        if not nieuw:
+            break
+        gezien_pub.update(nieuw)
+
+        for pub in nieuw:
+            try:
+                d = session.get(f"{base}/Publicatie/{pub}", timeout=cfg.timeout_seconds)
+            except Exception:
+                continue                      # één publicatie mag de bron niet stoppen
+            titel = ""
+            m = re.search(r"<h[12][^>]*>(.*?)</h[12]>", d.text, re.S)
+            if m:
+                titel = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", m.group(1))).strip()
+
+            # <li class="document ..." id="<guid>"> <div>Naam.pdf</div> ... </li>
+            for blok in re.findall(r"<li[^>]*\bdocument\b[^>]*>(.*?)</li>", d.text, re.S | re.I):
+                dm = re.search(r"/api-public/document/([0-9a-f-]{36})", blok, re.I)
+                if not dm or dm.group(1) in gezien_doc:
+                    continue
+                gezien_doc.add(dm.group(1))
+                bestand = ""
+                nm = re.search(r"<div[^>]*>([^<]+)</div>", blok)
+                if nm:
+                    bestand = nm.group(1).strip()
+                ext = bestand.rsplit(".", 1)[-1].lower() if "." in bestand else "pdf"
+                yield Document(bron=naam,
+                               url=f"{base}/api-public/document/{dm.group(1)}",
+                               ext=ext,
+                               titel=" - ".join(x for x in (titel, bestand) if x))
+            if cfg.delay_seconds:
+                time.sleep(cfg.delay_seconds)
+
+
+# --------------------------------------------------------------------------------------
 # Registry
 # --------------------------------------------------------------------------------------
 CONNECTORS = {
@@ -376,4 +490,5 @@ CONNECTORS = {
     "parlaeus": _parlaeus,
     "qualigraf": _parlaeus,     # zelfde platform
     "ibabs": _ibabs,
+    "mijnpublicaties": _mijnpublicaties,
 }

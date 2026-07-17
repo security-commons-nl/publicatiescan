@@ -10,7 +10,8 @@ from avgscan.state import State
 
 
 def test_registry_bevat_gevraagde_platforms():
-    for typ in ("sru", "crawl", "openraadsinformatie", "notubiz", "parlaeus", "qualigraf", "ibabs"):
+    for typ in ("sru", "crawl", "openraadsinformatie", "notubiz", "parlaeus", "qualigraf",
+                "ibabs", "mijnpublicaties"):
         assert typ in CONNECTORS
 
 
@@ -117,6 +118,74 @@ def test_sru_zonder_gemeenten_faalt_luid():
 def test_crawl_zonder_seeds_faalt_luid():
     with pytest.raises(BronNietGereed):
         _draai(CONNECTORS["crawl"], {"type": "crawl"})
+
+
+# --- mijnpublicaties.nl (TerInzageLeggingPortaal) ---
+_MP_ORG = "c3c4cefd-0426-4efd-8ea0-08dc45029d80"
+_MP_PUB = "70ee55c7-ac61-4edf-6f26-08ddf4283840"
+_MP_DOC = "cda97654-b985-4231-2c3c-08ddf42838f9"
+
+
+class _MpResp:
+    def __init__(self, text, status_code=200):
+        self.text = text
+        self.status_code = status_code
+
+
+class _MpSession:
+    """Bootst het portaal na: hoofdpagina, één gevulde en verder lege overzichtspagina's."""
+    def __init__(self):
+        self.gezien = []
+
+    def get(self, url, timeout=None):
+        self.gezien.append(url)
+        if url.endswith("/"):                       # hoofdpagina met de organisatielijst
+            return _MpResp(
+                f'<a href="/Organisatie/{_MP_ORG}">Gemeente Leiden</a>'
+                '<a href="/Organisatie/11111111-1111-1111-1111-111111111111">Gemeente Breda</a>')
+        if "?p=1" in url:                           # één publicatie op de eerste pagina
+            return _MpResp(f'<a href="/Publicatie/{_MP_PUB}">Aanvraag</a>')
+        if "/Publicatie/" in url:
+            return _MpResp(
+                "<h1>Aanvraag omgevingsvergunning, dakkapel, Voorbeeldstraat 1</h1>"
+                '<li class="document list-group-item" id="' + _MP_DOC + '">'
+                '<div class="mb-2">Samenvatting 000.pdf</div>'
+                f'<a href="/api-public/document/{_MP_DOC}" download>Download</a></li>')
+        return _MpResp("")                          # p=2 e.v.: leeg -> stoppen
+
+
+def test_mijnpublicaties_zonder_organisatie_faalt_luid():
+    with pytest.raises(BronNietGereed) as e:
+        _draai(CONNECTORS["mijnpublicaties"], {"type": "mijnpublicaties"})
+    assert "organisatie" in str(e.value).lower()
+
+
+def test_mijnpublicaties_onbekende_naam_faalt_luid_met_alternatieven():
+    with pytest.raises(BronNietGereed) as e:
+        list(CONNECTORS["mijnpublicaties"](
+            {"type": "mijnpublicaties", "organisatie_naam": "Gemeente Nergens"},
+            session=_MpSession(), cfg=_Cfg()))
+    # De melding moet bruikbaar zijn: welke organisaties bestaan er dan wel?
+    assert "Gemeente Leiden" in str(e.value)
+
+
+def test_mijnpublicaties_levert_document_met_naam_en_extensie():
+    docs = list(CONNECTORS["mijnpublicaties"](
+        {"type": "mijnpublicaties", "naam": "terinzage", "organisatie": _MP_ORG},
+        session=_MpSession(), cfg=_Cfg()))
+    assert len(docs) == 1
+    d = docs[0]
+    assert d.url.endswith(f"/api-public/document/{_MP_DOC}")
+    assert d.ext == "pdf"                            # uit de bestandsnaam, niet uit de URL
+    assert "dakkapel" in d.titel and "Samenvatting" in d.titel
+
+
+def test_mijnpublicaties_slaat_pagina_nul_over():
+    # Het portaal linkt zelf naar ?p=0 maar antwoordt daarop met HTTP 500.
+    s = _MpSession()
+    list(CONNECTORS["mijnpublicaties"](
+        {"type": "mijnpublicaties", "organisatie": _MP_ORG}, session=s, cfg=_Cfg()))
+    assert not any("?p=0" in u for u in s.gezien)
 
 
 # --- resume-tracking voor tekst-documenten ---

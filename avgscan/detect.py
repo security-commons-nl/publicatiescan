@@ -184,6 +184,19 @@ _BEDRAG_NA_RE = re.compile(r"^\s?,-|^[.,]\d{2}(?!\d)")                  # ,-  of
 _DUIZENDTAL_RE = re.compile(r"\d{1,3}(?:\.\d{3}){2,}")                  # 1.234.567 in de match zelf
 _REF_NA_RE = re.compile(r"^[A-Za-z/]")                                  # letter of '/' direct erna
 
+# --- Ruis uit de bekendmakingen-scan (17-07-2026) ---
+# Alle vier de valse Kritiek-hits over 30.546 bekendmakingen kwamen uit deze twee hoeken:
+# een regeling nummert haar artikelen ("Artikel 2.22.5.01 Geur landbouwhuisdieren") en een
+# bouw-/verkeersbesluit verwijst naar tekeningnummers ("Situatietekening: 23.xxx.xx.1").
+# Beide zijn lange cijferreeksen die toevallig door de elfproef komen.
+_ARTIKEL_VOOR_RE = re.compile(r"\bartikel\s*$", re.IGNORECASE)
+_TEKENING_VOOR_RE = re.compile(
+    r"\b(?:situatie|bouw|overzicht|detail|constructie)?tekening(?:nummer)?\s*:?\s*$",
+    re.IGNORECASE)
+# '.RAP003' direct achter een documentnummer: rapportbijlage van een adviesbureau, geen
+# identiteitsbewijs (17-07-2026: 'Documentnummer: SOB0xxxxx.RAP003, WSP Nederland B.V.').
+_RAPPORTNR_NA_RE = re.compile(r"^\s?\.\s?[A-Za-z]{2,8}\d*\b")
+
 
 def _is_getaltabel(text: str, start: int, end: int) -> bool:
     """Zit de reeks in een dichte getallenreeks (bedragen-/cijfertabel, of OCR-tabelruis)?"""
@@ -216,6 +229,10 @@ def _bsn_reden(text: str, start: int, end: int, matched: str) -> str:
         return "onderdeel van een geldbedrag — geen BSN"
     if _REF_NA_RE.match(na) or _KENMERK_PREFIX_RE.search(voor):
         return "onderdeel van een zaak-/besluit-/referentiekenmerk — vrijwel zeker geen BSN"
+    if _ARTIKEL_VOOR_RE.search(voor):
+        return "artikelnummer uit een regeling, geen BSN"
+    if _TEKENING_VOOR_RE.search(voor):
+        return "tekeningnummer bij een besluit, geen BSN"
     if _is_getaltabel(text, start, end):
         return "cijfer uit een getallentabel — geen BSN"
     return ""
@@ -303,10 +320,18 @@ def _find_naw(text, loc, out):
 def _find_paspoort(text, loc, out):
     for m in _PASPOORT_RE.finditer(text):
         near = text[max(0, m.start() - 40):m.start()]
-        if _ID_HINT.search(near):
-            out.append(Finding("Paspoort/rijbewijs-nr", KRITIEK, m.group(0), loc,
+        if not _ID_HINT.search(near):
+            continue
+        # 'documentnummer' is óók hoe adviesbureaus hun rapportbijlagen nummeren. Staat er
+        # een rapportsuffix achter, dan is het geen identiteitsbewijs.
+        if _RAPPORTNR_NA_RE.match(text[m.end():m.end() + 12]):
+            out.append(Finding("Paspoort/rijbewijs-nr", LAAG, m.group(0), loc,
                                _snippet(text, m.start(), m.end(), m.group(0)),
-                               "documentnummer-patroon nabij ID-term (laag vertrouwen)"))
+                               "documentnummer van een rapportbijlage, geen ID-bewijs"))
+            continue
+        out.append(Finding("Paspoort/rijbewijs-nr", KRITIEK, m.group(0), loc,
+                           _snippet(text, m.start(), m.end(), m.group(0)),
+                           "documentnummer-patroon nabij ID-term (laag vertrouwen)"))
 
 
 _DETECTORS = {
