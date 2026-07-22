@@ -87,7 +87,13 @@ def _poging(session, url: str, dest_dir: str, max_mb: int, timeout: int):
                     h.update(chunk)
                     f.write(chunk)
     except Exception as e:
-        return None, f"{type(e).__name__}", _BACKOFF[0]      # netwerkhapering: opnieuw proberen
+        naam = type(e).__name__
+        if naam == "TooManyRedirects":
+            # Redirect-lus: de server verwijst de URL naar zichzelf (gezien 22-07-2026 bij
+            # externe bijlagen met een verkeerd manifestatie-label). Dat is permanent;
+            # retryen kost per document minuten aan backoff zonder ooit te slagen.
+            return None, naam, None
+        return None, naam, _BACKOFF[0]                       # netwerkhapering: opnieuw proberen
 
     sha = h.hexdigest()
     ext = os.path.splitext(urlparse(url).path)[1] or ".bin"

@@ -118,7 +118,7 @@ def test_bijlage_zonder_kennisgevings_pdf_komt_toch_mee():
 def _veld_naar_items(veld: str):
     import xml.etree.ElementTree as ET
     rec = ET.fromstring(f"<record><externeBijlage>{veld}</externeBijlage></record>")
-    return list(sru._bijlagen(rec))
+    return list(sru._bijlagen(rec))     # session=None -> patroon-fallback, geen netwerk
 
 
 def test_veld_zonder_bestandsnaam_krijgt_id_als_naam():
@@ -135,3 +135,54 @@ def test_pipe_in_bestandsnaam_breekt_de_id_niet():
 
 def test_veld_zonder_herkenbaar_id_wordt_overgeslagen():
     assert _veld_naar_items("bestand-zonder-id.pdf") == []
+
+
+# --- manifestatie-label uit de work-level listing ---------------------------------
+# Het label verschilt per jaargang ('bijlage' recent, 'pdf' bij o.a. 2014) en de
+# verkeerde variant is een 301 naar zichzelf: een oneindige redirect. De listing is
+# dus geen optimalisatie maar een noodzaak.
+_LISTING_PDF = """<result>
+  <expression label="1">
+    <manifestation label="pdf">
+      <metadata />
+      <item label="exb-2099-777.pdf" _deleted="false" />
+    </manifestation>
+  </expression>
+</result>"""
+
+
+def test_bijlage_url_volgt_manifestatie_uit_listing():
+    url = sru._bijlage_url(_Session(_LISTING_PDF), "exb-2099-777")
+    assert url == ("https://repository.officiele-overheidspublicaties.nl/"
+                   "externebijlagen/exb-2099-777/1/pdf/exb-2099-777.pdf")
+
+
+def test_bijlage_url_valt_terug_op_patroon_bij_kapotte_listing():
+    class _Boom:
+        def get(self, url, timeout=None):
+            raise RuntimeError("geen verbinding")
+    assert sru._bijlage_url(_Boom(), "exb-2099-888") == sru.EXB_URL.format(id="exb-2099-888")
+
+
+def test_bijlage_url_zonder_session_gebruikt_patroon():
+    assert sru._bijlage_url(None, "exb-2099-999") == sru.EXB_URL.format(id="exb-2099-999")
+
+
+# --- redirect-lus is permanent: niet minutenlang retryen --------------------------
+def test_redirect_lus_wordt_niet_geretryd(tmp_path):
+    from avgscan import fetch
+
+    class TooManyRedirects(Exception):
+        """Zelfde typenaam als requests.TooManyRedirects; fetch toetst op de naam."""
+
+    class _LusSession:
+        def __init__(self):
+            self.pogingen = 0
+        def get(self, url, **kw):
+            self.pogingen += 1
+            raise TooManyRedirects(url)
+
+    s = _LusSession()
+    local, reden = fetch.download(s, "https://x/lus.pdf", str(tmp_path), 60, timeout=5)
+    assert local is None and reden == "TooManyRedirects"
+    assert s.pogingen == 1                  # direct opgeven, geen backoff-minuten

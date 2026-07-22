@@ -20,17 +20,15 @@ en die is op twee manieren onzichtbaar voor wie alleen naar itemUrls kijkt:
   * het record verwijst ernaar via het metadataveld <gzd:externeBijlage>, met als
     inhoud "bestandsnaam|exb-id" (één element per bijlage), NIET via een itemUrl.
 
-De download-URL is deterministisch te construeren uit het exb-id (patroon
-geverifieerd op meerdere bijlagen uit verschillende jaren):
-
-  https://repository.officiele-overheidspublicaties.nl/externebijlagen/
-      <exb-id>/1/bijlage/<exb-id>.pdf
-
-Aannames daarbij: expressieversie '/1/' en extensie '.pdf' (KOOP levert bijlagen
-als PDF). Klopt dat voor een enkel geval ooit niet, dan wordt dat een zichtbare
-http-404 in de statusdatabase — geen stil gat. In een steekproef had ruim een
-derde van de gemeentelijke records één of meer externe bijlagen; wie ze overslaat
-scant dus de kennisgeving en mist het besluit.
+De download-URL wordt per bijlage opgebouwd uit de work-level listing van de
+repository (expressie/manifestatie/bestandsnaam, zie _bijlage_url): het
+manifestatie-label verschilt per jaargang ('bijlage' voor recente, 'pdf' voor
+oudere zoals 2014) en de verkeerde variant is een oneindige redirect
+(gezien 22-07-2026). Is de listing onleesbaar, dan is het 'bijlage'-patroon de
+fallback en wordt een foutlopende bijlage een zichtbare fout in de
+statusdatabase — geen stil gat. In een steekproef had ruim een derde van de
+gemeentelijke records één of meer externe bijlagen; wie ze overslaat scant dus
+de kennisgeving en mist het besluit.
 """
 from __future__ import annotations
 
@@ -40,8 +38,8 @@ import xml.etree.ElementTree as ET
 from urllib.parse import urlencode
 
 SRU_ENDPOINT = "https://repository.overheid.nl/sru"
-EXB_URL = ("https://repository.officiele-overheidspublicaties.nl/"
-           "externebijlagen/{id}/1/bijlage/{id}.pdf")
+EXB_BASE = "https://repository.officiele-overheidspublicaties.nl/externebijlagen"
+EXB_URL = EXB_BASE + "/{id}/1/bijlage/{id}.pdf"
 _EXB_ID_RE = re.compile(r"exb-\d{4}-\d+")
 
 
@@ -82,7 +80,37 @@ def _title(record) -> str:
     return ""
 
 
-def _bijlagen(record):
+def _bijlage_url(session, exb: str, timeout: int = 30) -> str:
+    """Bepaal de download-URL van één externe bijlage.
+
+    Het pad-segment achter de expressie is het MANIFESTATIE-LABEL en dat verschilt
+    per jaargang: recente bijlagen staan onder 'bijlage', oudere (o.a. 2014) onder
+    'pdf' — en de verkeerde variant antwoordt met een 301 naar zichzelf, een
+    oneindige redirect (gezien 22-07-2026). Daarom wordt expressie, label en
+    bestandsnaam per bijlage uit de work-level listing gelezen
+    (GET <EXB_BASE>/<id>/<expressie>/ geeft een klein XML'etje). Alleen als die
+    listing onbereikbaar of onleesbaar is, valt de code terug op het
+    'bijlage'-patroon; een bijlage die dan toch fout loopt wordt een zichtbare
+    fout in de statusdatabase, geen stil gat.
+    """
+    if session is not None:
+        try:
+            r = session.get(f"{EXB_BASE}/{exb}/1/", timeout=timeout)
+            root = ET.fromstring(r.content)
+            for expr in _iter_local(root, "expression"):
+                versie = (expr.attrib.get("label") or "1").strip()
+                for man in _iter_local(expr, "manifestation"):
+                    label = (man.attrib.get("label") or "").strip()
+                    for item in _iter_local(man, "item"):
+                        bestand = (item.attrib.get("label") or "").strip()
+                        if label and bestand:
+                            return f"{EXB_BASE}/{exb}/{versie}/{label}/{bestand}"
+        except Exception:
+            pass
+    return EXB_URL.format(id=exb)
+
+
+def _bijlagen(record, session=None, timeout: int = 30):
     """Yield (url, bestandsnaam) voor elke externe bijlage van een record.
 
     Het veld heeft het formaat "bestandsnaam|exb-id". De bestandsnaam kan zelf een
@@ -99,7 +127,7 @@ def _bijlagen(record):
         if not m:
             continue
         exb = m.group(0)
-        yield EXB_URL.format(id=exb), (naam.strip() or exb)
+        yield _bijlage_url(session, exb, timeout), (naam.strip() or exb)
 
 
 def harvest(session, creator: str, max_records: int, since: str | None = None,
@@ -149,7 +177,7 @@ def harvest(session, creator: str, max_records: int, since: str | None = None,
             pdf = _pdf_url(rec)
             if pdf:
                 items.append((pdf, titel))
-            for burl, bnaam in _bijlagen(rec):
+            for burl, bnaam in _bijlagen(rec, session, timeout):
                 items.append((burl, f"{titel} · bijlage: {bnaam}" if titel
                               else f"bijlage: {bnaam}"))
             if not items:
