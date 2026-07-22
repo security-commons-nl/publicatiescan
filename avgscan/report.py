@@ -23,6 +23,19 @@ def write_html(rows, out_path, scanned_files, scanned_pages):
         tel[r[3]] = tel.get(r[3], 0) + 1
     chips = " · ".join(f"{k}: {v}" for k, v in sorted(tel.items(), key=lambda kv: SEVERITY_ORDER.get(kv[0], 9)))
 
+    # De HTML is het triage-document: Kritiek/Hoog/Middel als rijen. Laag is per
+    # definitie de verwachte ruis (onderwerp-adressen, eigen werkadressen, vaste
+    # nummers) en bestaat op een volledige historie uit tienduizenden rijen; die
+    # maken het bestand tientallen MB's groot en onbruikbaar in een browser. Laag
+    # wordt daarom NIET als rijen getoond maar als telling per soort, met de
+    # volledige lijst in het Excel-rapport — samengevat, niet stil weggelaten.
+    laag = [r for r in rows if r[3] == "Laag"]
+    rows = [r for r in rows if r[3] != "Laag"]
+    laag_tel = {}
+    for r in laag:
+        laag_tel[r[2]] = laag_tel.get(r[2], 0) + 1
+    laag_regel = " · ".join(f"{k}: {v}" for k, v in sorted(laag_tel.items(), key=lambda kv: -kv[1]))
+
     trs = []
     for url, path, soort, ernst, waarde, loc, ctx, opm in rows:
         kleur = _ERNST_KLEUR.get(ernst, "#5a5a5a")
@@ -62,15 +75,18 @@ def write_html(rows, out_path, scanned_files, scanned_pages):
 <div class="sub">Intern werkdocument · bevat mogelijk persoonsgegevens · gegenereerd {date.today().isoformat()}</div>
 <div class="band"></div>
 <div class="meta">
- <b>{len(rows)}</b> bevindingen in <b>{scanned_files}</b> geanalyseerde documenten
+ <b>{len(rows) + len(laag)}</b> bevindingen in <b>{scanned_files}</b> geanalyseerde documenten
  ({scanned_pages} pagina's gecrawld).<br>Verdeling: {html.escape(chips) or "geen"}.<br>
  <b>Let op:</b> waarden zijn gemaskeerd; elke hit vergt handmatige context-beoordeling
  (bestuurder/burger/medewerker/leverancier · bewust gepubliceerd vs. datalek).
- BSN-hits zijn gevalideerd met de elfproef, IBAN met mod-97.
+ BSN-hits zijn gevalideerd met de elfproef, IBAN met mod-97.<br>
+ <b>Laag ({len(laag)}):</b> hieronder samengevat, niet als rijen (verwachte ruis; houdt dit
+ bestand bruikbaar). Volledige lijst: rapport.xlsx.
+ <span class="sub">{html.escape(laag_regel) or "geen"}</span>
 </div>
 <table>
 <tr><th>Ernst</th><th>Soort</th><th>Waarde (gemaskeerd)</th><th>Locatie</th><th>Bron</th><th>Context</th><th>Opmerking</th></tr>
-{''.join(trs) if trs else '<tr><td colspan=7>Geen bevindingen.</td></tr>'}
+{''.join(trs) if trs else '<tr><td colspan=7>Geen bevindingen (boven Laag).</td></tr>'}
 </table>
 </main></body></html>"""
     with open(out_path, "w", encoding="utf-8") as f:
