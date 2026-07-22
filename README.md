@@ -109,6 +109,19 @@ expliciet en wijst deze API aan als de norm. Voor de meeste gemeenten is dit met
 het grootste kanaal in aantallen documenten — vergunning-kennisgevingen met adressen
 in de titel zitten hier allemaal in.
 
+De scanner haalt per bekendmaking twee dingen op: de **kennisgevingstekst** zelf én
+de **externe bijlagen** — het onderliggende besluit, de brief aan de aanvrager. Dat
+onderscheid is belangrijker dan het lijkt. De bijlage is het document waar de
+persoonsgegevens in staan (naam en woonadres van de aanvrager), maar hij is in de
+API vrijwel onzichtbaar: geen eigen record, geen directe link, alleen een
+metadataveld aan het moederrecord. In een steekproef had ruim een derde van de
+gemeentelijke bekendmakingen zo'n bijlage.
+
+> **Draaide je een eerdere versie van deze scanner?** Versies van vóór 22-07-2026
+> scanden alleen de kennisgevingsteksten en sloegen de externe bijlagen stil over.
+> Een schone uitkomst uit zo'n run zegt dus niets over de bijlagen — draai het
+> kanaal opnieuw.
+
 Begin met een korte proefrun:
 
 ```bash
@@ -170,12 +183,14 @@ zijn dus niet te scannen. Voor historie is `sru` de aangewezen bron. De kracht v
 juist preventief: draai hem periodiek en je ziet een probleem *tijdens* de inzagetermijn,
 niet jaren later via een datalekmelding.
 
-Let op: **het raadsinformatiesysteem is empirisch het grootste risico**, niet de
-bekendmakingen. Ingekomen brieven van inwoners en hun bijlagen zijn precies waar het in
-de praktijk misgaat. Elk RIS-product werkt anders, en sommige zijn JavaScript-apps waar
-de crawler niet doorheen komt — daarvoor zijn deze connectors. Een connector die niet kan
-draaien **faalt luid** en wordt als 'niet uitgevoerd' gemeld; een lege uitkomst betekent
-hier dus nooit vanzelf 'schoon'.
+Let op: **de risico's zitten in de bijlagen, niet in de hoofddocumenten.** In het
+raadsinformatiesysteem zijn dat ingekomen brieven van inwoners met hun bijlagen; bij de
+bekendmakingen zijn het de externe bijlagen met het onderliggende besluit. In beide
+gevallen is het hoofddocument (agenda, kennisgeving) vrijwel altijd schoon en zit het
+persoonsgegeven één laag dieper. Elk RIS-product werkt anders, en sommige zijn
+JavaScript-apps waar de crawler niet doorheen komt — daarvoor zijn deze connectors. Een
+connector die niet kan draaien **faalt luid** en wordt als 'niet uitgevoerd' gemeld; een
+lege uitkomst betekent hier dus nooit vanzelf 'schoon'.
 
 ### Bouwen aan Notubiz en iBabs
 
@@ -237,9 +252,16 @@ toevallig in hetzelfde tekstfragment stonden. Het rapport is dus zelf geen datal
 | Ernst | Wat |
 |---|---|
 | **Kritiek** | BSN (elfproef geldig) · paspoort-/rijbewijsnummer nabij een ID-term |
-| **Hoog** | IBAN (mod-97 geldig) · geboortedatum die expliciet zo benoemd wordt |
-| **Middel** | E-mail op een vreemd domein · mobiel nummer · **afwijkend adres** · verborgen Excel-tabblad |
+| **Hoog** | IBAN (mod-97 geldig) · geboortedatum die expliciet zo benoemd wordt · **persoonsnaam met een woonadres er direct bij** |
+| **Middel** | E-mail op een vreemd domein · mobiel nummer · **afwijkend adres** · persoonsnaam in een aanhef · verborgen Excel-tabblad |
 | **Laag** | E-mail op je eigen domein · vast nummer · het onderwerp-adres van een besluit |
+
+Over die naam-adres-combinatie: dit is precies hoe een publicatielek er in de praktijk
+uitziet. Een besluitbrief hoort niet gepubliceerd te worden mét de aanhef en het
+woonadres van de aanvrager erin — maar het adres alléén is als onderwerp-adres van het
+besluit juist verwacht (ernst Laag), en een naam alléén kan ook een wethouder zijn
+(ernst Middel). Pas de combinatie maakt het een vrijwel zeker lek, en die krijgt dus
+Hoog.
 
 ---
 

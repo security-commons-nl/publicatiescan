@@ -135,6 +135,24 @@ _POSTBUS_RE = re.compile(r"\bpostbus\b[\s\S]{0,15}$", re.I)
 _GEBOORTE_HINT = re.compile(r"geboren|geboortedatum|geb\.?\s|geb\.?dat", re.I)
 _ID_HINT = re.compile(r"paspoort|rijbewijs|identiteits|documentnummer|id[- ]?kaart", re.I)
 
+# Persoonsnaam achter een aanhef ("De heer B. Voorbeeld", "Geachte mevrouw Jansen").
+# Het aanhef-anker is bewust de kern: een naam zonder aanhef is met regex niet
+# betrouwbaar te herkennen, een naam mét aanhef wel — en gepubliceerde brieven aan
+# inwoners (het klassieke publicatielek: besluitbrief als bijlage bij een
+# bekendmaking) beginnen vrijwel altijd zo. 'heer' klein gehouden zodat 'De Heer'
+# (religieus of achternaam) niet als aanhef matcht. De achternaam is één token
+# (evt. met koppelteken of apostrof) na optionele initialen en tussenvoegsels;
+# bewust géén tweede los naamdeel, anders slokt de match de straatnaam op die in
+# een adresblok direct onder de naam staat.
+_PERSOONSNAAM_RE = re.compile(
+    r"\b(?:[Dd]e\s+heer(?:/mevrouw)?|[Mm]evrouw|[Dd]hr\.|[Mm]evr\.|[Mm]w\."
+    r"|[Gg]eachte\s+(?:heer|mevrouw))"
+    r"\s+"
+    r"((?:[A-Z]\.\s*)*"                                  # initialen, optioneel
+    r"(?:(?:van|de|den|der|ten|ter|te|'t|op|in)\s+)*"    # tussenvoegsels
+    r"[A-ZÀ-Ž][A-Za-zà-ž'-]+)"                           # achternaam
+)
+
 # Domeinen van de eigen organisatie. Een e-mailadres op zo'n domein is het
 # werkadres van een medewerker en dus geen lek -> ernst Laag. Vul dit via
 # 'eigen_domeinen' in de config; leeg = elk e-mailadres krijgt Middel.
@@ -317,6 +335,38 @@ def _find_naw(text, loc, out):
                            "postcode met huisnummer in de buurt"))
 
 
+def _woonadres_nabij(text, start, end, voor=100, na=200) -> bool:
+    """Staat er een woonadres-postcode vlak bij deze positie? Postbusadressen
+    tellen niet mee: dat is het adres van een organisatie, geen woonadres."""
+    a, b = max(0, start - voor), min(len(text), end + na)
+    venster = text[a:b]
+    for m in _iter_postcodes(venster):
+        if _POSTBUS_RE.search(venster[max(0, m.start() - 40):m.start()]):
+            continue
+        return True
+    return False
+
+
+def _find_persoonsnaam(text, loc, out):
+    """Persoonsnaam in een aanhef. Op zichzelf Middel (kan een bestuurder of
+    raadslid zijn — menselijke beoordeling). Met een woonadres er direct bij wordt
+    het Hoog: naam + woonadres van een inwoner in een gepubliceerd stuk is precies
+    de combinatie waar publicatielekken uit bestaan, terwijl beide componenten los
+    van elkaar (adres = onderwerp-adres, ernst Laag) onder de radar blijven."""
+    for m in _PERSOONSNAAM_RE.finditer(text):
+        naam = re.sub(r"\s+", " ", m.group(1)).strip()
+        if _woonadres_nabij(text, m.start(), m.end()):
+            out.append(Finding("Persoonsnaam (aanhef)", HOOG, naam, loc,
+                               _snippet(text, m.start(), m.end(), m.group(1)),
+                               "persoonsnaam met een woonadres er direct bij — "
+                               "klassiek publicatielek; controleren"))
+        else:
+            out.append(Finding("Persoonsnaam (aanhef)", MIDDEL, naam, loc,
+                               _snippet(text, m.start(), m.end(), m.group(1)),
+                               "aanhef met persoonsnaam — beoordeel of publicatie "
+                               "rechtmatig is (inwoner vs. functionaris)"))
+
+
 def _find_paspoort(text, loc, out):
     for m in _PASPOORT_RE.finditer(text):
         near = text[max(0, m.start() - 40):m.start()]
@@ -342,6 +392,7 @@ _DETECTORS = {
     "geboortedatum": _find_geboortedatum,
     "naw": _find_naw,
     "paspoort_rijbewijs": _find_paspoort,
+    "persoonsnaam": _find_persoonsnaam,
 }
 
 

@@ -60,8 +60,10 @@ def crawl_phase(cfg, crawler, st, max_pages):
 def sru_phase(cfg, crawler, st, creators, max_records, since, until=None):
     """Vul de bestandswachtrij via de KOOP SRU-API i.p.v. crawlen.
 
-    Per gemeente de PDF-URL's van de officiële bekendmakingen ophalen en als 'file'
-    inschrijven; de analyse-fase downloadt en scant ze daarna.
+    Per gemeente de document-URL's van de officiële bekendmakingen ophalen en als
+    'file' inschrijven: de kennisgevings-PDF én de externe bijlagen (de
+    onderliggende besluiten, zie avgscan/sru.py). De analyse-fase downloadt en
+    scant ze daarna.
 
     Zonder tijdvenster valt een lege since-query terug op een query zonder datumfilter.
     Met een expliciet venster (since+until) gebeurt dat NIET: bij per-jaar slicen zou een
@@ -83,7 +85,8 @@ def sru_phase(cfg, crawler, st, creators, max_records, since, until=None):
                 st.add_file(pdf_url, "pdf")
                 n += 1
         st.conn.commit()
-        print(f"  SRU {creator}: {n} nieuwe PDF-URL('s) in wachtrij")
+        print(f"  SRU {creator}: {n} nieuwe document-URL('s) in wachtrij "
+              f"(kennisgevingen + externe bijlagen)")
         total += n
     return total
 

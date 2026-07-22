@@ -6,7 +6,7 @@ syntactisch geldig (ze doorstaan de elfproef c.q. mod-97) maar niet uitgegeven.
 import pytest
 
 from avgscan.detect import (
-    KRITIEK, LAAG, MIDDEL,
+    HOOG, KRITIEK, LAAG, MIDDEL,
     is_valid_bsn, is_valid_iban_nl, mask, scan_text, set_eigen_domeinen,
 )
 
@@ -238,6 +238,81 @@ def test_echt_paspoortnummer_blijft_kritiek():
     treffers = soorten("Legitimatie: paspoortnummer NX1234567 getoond.", "paspoort_rijbewijs")
     assert len(treffers) == 1
     assert treffers[0].ernst == KRITIEK
+
+
+# ---------------------------------------------------------------------------
+# Persoonsnaam (aanhef) — de motor achter het naam+woonadres-signaal
+# ---------------------------------------------------------------------------
+# Waarom deze detector bestaat: in een gepubliceerde besluitbrief is het adres het
+# onderwerp-adres (terecht Laag) en een losse naam hooguit Middel. Het LEK is de
+# combinatie: aanhef-naam met het woonadres er direct onder. Zonder deze detector
+# scoren zulke brieven alleen Laag en verdrinken ze in de triage.
+def namen(tekst):
+    return [f for f in soorten(tekst, "persoonsnaam") if f.soort.startswith("Persoonsnaam")]
+
+
+@pytest.mark.parametrize("tekst,naam", [
+    ("De heer B. Voorbeeld wordt uitgenodigd", "B. Voorbeeld"),
+    ("Mevrouw M.M.J. Testman heeft aangevraagd", "M.M.J. Testman"),
+    ("T.a.v. de heer B.J.G. de Tester", "B.J.G. de Tester"),
+    ("Geachte mevrouw Jansen-Voorbeeld,", "Jansen-Voorbeeld"),
+    ("Aan mw. A. van der Proef", "A. van der Proef"),
+    ("Dhr. C. op 't Veld is gehoord", "C. op 't Veld"),
+])
+def test_aanhef_naam_wordt_gevonden(tekst, naam):
+    treffers = namen(tekst)
+    assert [f.waarde for f in treffers] == [naam]
+    assert treffers[0].ernst == MIDDEL          # zonder adres erbij: beoordelen
+
+
+@pytest.mark.parametrize("tekst", [
+    "De Heer zij geprezen",                     # religieus: hoofdletter-Heer is geen aanhef
+    "de heer die daar liep",                    # geen naam (kleine letter) erachter
+    "Geachte mevrouw, hierbij ontvangt u",      # aanhef zonder naam
+    "mevrouw 12 heeft gebeld",                  # geen naam erachter
+])
+def test_geen_aanhef_naam(tekst):
+    assert namen(tekst) == []
+
+
+def test_naam_met_woonadres_erbij_wordt_hoog():
+    # Nagebouwd op het adresblok van een echte besluitbrief (fictieve gegevens):
+    # naam en woonadres direct onder elkaar op pagina 1.
+    tekst = ("Mevrouw A. Voorbeeld Teststraat 12 2313 SJ Teststad "
+             "Bezoekadres Stadskantoor Voorbeeldlaan 190")
+    treffers = namen(tekst)
+    assert len(treffers) == 1
+    assert treffers[0].ernst == HOOG
+    assert "woonadres" in treffers[0].opmerking
+
+
+def test_naam_met_alleen_postbus_blijft_middel():
+    # Een postbus is het adres van een organisatie; die combinatie is geen
+    # naam+woonadres-lek en mag de Hoog-triage niet vervuilen.
+    tekst = "De heer B. Voorbeeld, per adres Postbus 9100, 2300 PC Teststad"
+    treffers = namen(tekst)
+    assert len(treffers) == 1
+    assert treffers[0].ernst == MIDDEL
+
+
+def test_naam_ver_van_adres_blijft_middel():
+    tekst = ("De heer B. Voorbeeld sprak in. " + "Verder ging het over de begroting. " * 12
+             + "Het perceel ligt aan de Teststraat 12, 2313 SJ Teststad.")
+    treffers = namen(tekst)
+    assert len(treffers) == 1
+    assert treffers[0].ernst == MIDDEL
+
+
+def test_aanhef_naam_wordt_gemaskeerd_in_context():
+    treffers = namen("Geachte mevrouw Jansen-Voorbeeld, hierbij het besluit")
+    assert "Jansen-Voorbeeld" not in treffers[0].context
+
+
+def test_straatnaam_onder_de_naam_wordt_niet_meegepakt():
+    # In een adresblok staat de straat direct achter/onder de naam; de match moet
+    # bij de achternaam stoppen, anders wordt de straat deel van de 'naam'.
+    treffers = namen("Mevrouw E. Proefsma Teststraat 12")
+    assert treffers[0].waarde == "E. Proefsma"
 
 
 def test_getallentabel_geen_kritieke_bsn():

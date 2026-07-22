@@ -154,3 +154,6 @@ detectors:
   geboortedatum: true
   naw: true                       # postcode + huisnummer
   paspoort_rijbewijs: true        # laag vertrouwen, alleen nabij een ID-term
+  persoonsnaam: true              # naam achter een aanhef ("De heer J. ..."); met een
+                                  # woonadres erbij wordt het Hoog: die combinatie is
+                                  # het klassieke lek in gepubliceerde besluitbrieven

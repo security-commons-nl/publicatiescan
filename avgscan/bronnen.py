@@ -13,7 +13,9 @@ niets te weten van de herkomst. Een nieuwe gemeente op een bestaand platform toe
 is dan puur config; een nieuw platform is één connector erbij.
 
 Verificatiestatus van de connectors (14-07-2026, tegen de echte endpoints getest):
-  sru                 werkend  - KOOP SRU-API (officiële bekendmakingen)
+  sru                 werkend  - KOOP SRU-API (officiële bekendmakingen); sinds
+                                 22-07-2026 óók de externe bijlagen (de onderliggende
+                                 besluiten) — zie avgscan/sru.py
   crawl               werkend  - beleefde HTML-crawler
   openraadsinformatie werkend  - landelijke Elasticsearch, tekst al geëxtraheerd
   notubiz             deels    - document-download geverifieerd, enumeratie nog niet
