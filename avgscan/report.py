@@ -16,7 +16,11 @@ def _sorted(rows):
     return sorted(rows, key=lambda r: (SEVERITY_ORDER.get(r[3], 9), r[2], r[0]))
 
 
-def write_html(rows, out_path, scanned_files, scanned_pages):
+def write_html(rows, out_path, scanned_files, scanned_pages, intro_html=None):
+    """Schrijf het HTML-rapport. `intro_html` (optioneel) is een blok ruwe HTML dat
+    bovenaan komt: bedoeld voor een organisatie-specifieke management-samenvatting
+    (bronnen, werkwijze, duiding). Het staat los van de tool zodat het rapport zelf
+    generiek en herbruikbaar blijft; avg_scan vult het vanuit output_dir/intro.html."""
     rows = _sorted(rows)
     tel = {}
     for r in rows:
@@ -79,11 +83,17 @@ def write_html(rows, out_path, scanned_files, scanned_pages):
  .ctx{{color:#333;max-width:320px;}}
  td .sub{{color:#8a8a8a;font-size:10px;}}
  a{{color:#1f4e79;word-break:break-all;}}
+ .intro{{background:#fff;border:1px solid #d6d6d6;border-left:4px solid #c8102e;padding:14px 20px;border-radius:5px;margin-bottom:16px;font-size:12.5px;line-height:1.5;}}
+ .intro h2{{font-size:15px;color:#1f4e79;margin:16px 0 5px;}}
+ .intro h2:first-child{{margin-top:0;}}
+ .intro table{{margin:6px 0;}}
+ .intro td,.intro th{{padding:4px 8px;}}
  @media print{{body{{background:#fff;}}th{{position:static;}}}}
 </style></head><body><main>
 <h1>publicatiescan — bevindingen</h1>
 <div class="sub">Intern werkdocument · bevat mogelijk persoonsgegevens · gegenereerd {date.today().isoformat()}</div>
 <div class="band"></div>
+{f'<div class="intro">{intro_html}</div>' if intro_html else ''}
 <div class="meta">
  <b>{len(rows) + n_samengevat}</b> bevindingen in <b>{scanned_files}</b> geanalyseerde documenten
  ({scanned_pages} pagina's gecrawld).<br>Verdeling: {html.escape(chips) or "geen"}.<br>

@@ -194,7 +194,16 @@ def build_report(cfg, st):
     rows = st.all_findings()
     html_path = os.path.join(cfg.output_dir, "rapport.html")
     xlsx_path = os.path.join(cfg.output_dir, "rapport.xlsx")
-    report.write_html(rows, html_path, st.count_files_total(), st.count_pages_done())
+    # Optionele organisatie-specifieke management-samenvatting: leg een intro.html in de
+    # output-map en die komt bovenaan het rapport (bronnen, werkwijze, duiding voor bv.
+    # de FG/privacy-officer). Blijft buiten de tool zodat de code generiek blijft.
+    intro = None
+    intro_path = os.path.join(cfg.output_dir, "intro.html")
+    if os.path.exists(intro_path):
+        with open(intro_path, "r", encoding="utf-8") as f:
+            intro = f.read()
+    report.write_html(rows, html_path, st.count_files_total(), st.count_pages_done(),
+                      intro_html=intro)
     report.write_excel(rows, xlsx_path)
     return html_path, xlsx_path, len(rows)
 

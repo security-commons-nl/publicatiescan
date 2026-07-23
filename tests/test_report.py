@@ -43,6 +43,25 @@ def test_html_totaaltelling_blijft_alle_bevindingen():
     assert "<b>4</b> bevindingen" in doc              # 1 Hoog + 1 Middel + 2 Laag
 
 
+def test_intro_komt_bovenaan_als_meegegeven():
+    d = tempfile.mkdtemp()
+    pad = os.path.join(d, "rapport.html")
+    report.write_html(_RIJEN, pad, 3, 0,
+                      intro_html="<h2>Bronnen</h2><p>KOOP SRU-API</p>")
+    doc = open(pad, encoding="utf-8").read()
+    assert '<div class="intro">' in doc
+    assert "KOOP SRU-API" in doc
+    # de intro staat vóór de bevindingentabel
+    assert doc.index("KOOP SRU-API") < doc.index("<table>")
+
+
+def test_geen_intro_geen_leeg_blok():
+    d = tempfile.mkdtemp()
+    pad = os.path.join(d, "rapport.html")
+    report.write_html(_RIJEN, pad, 3, 0)
+    assert '<div class="intro">' not in open(pad, encoding="utf-8").read()
+
+
 def test_excel_houdt_alles():
     import openpyxl
     d = tempfile.mkdtemp()
