@@ -326,9 +326,27 @@ def _find_bsn(text, loc, out):
                            "9-cijferige reeks, geldig volgens elfproef"))
 
 
+# Een IBAN met een KVK-/handelsregister-/BTW-nummer vlakbij is een BEDRIJFSrekening
+# (factuur, bedrijfsvoettekst in een aanvraagbijlage), geen persoonlijk gegeven. Die
+# wordt apart gelabeld ("IBAN (zakelijk)") en afgewaardeerd naar Laag, zodat de echte
+# persoonlijke IBAN-lekken bovenaan de triage blijven staan. Alleen bedrijfsidentifiers
+# (kvk/handelsregister/btw/rsin) tellen; die horen niet bij een privépersoon.
+_ZAKELIJK_IBAN_RE = re.compile(
+    r"\b(?:kvk|k\.?v\.?k\.?|handelsregister|kamer van koophandel|btw|rsin|omzetbelasting)\b",
+    re.IGNORECASE)
+
+
 def _find_iban(text, loc, out):
     for m in _IBAN_RE.finditer(text):
-        if is_valid_iban_nl(m.group(0)):
+        if not is_valid_iban_nl(m.group(0)):
+            continue
+        venster = text[max(0, m.start() - 60):m.end() + 60]
+        if _ZAKELIJK_IBAN_RE.search(venster):
+            out.append(Finding("IBAN (zakelijk)", LAAG, m.group(0), loc,
+                               _snippet(text, m.start(), m.end(), m.group(0)),
+                               "IBAN met KVK-/handelsregister-/BTW-nummer in de buurt — "
+                               "bedrijfsrekening, geen persoonlijk gegeven"))
+        else:
             out.append(Finding("IBAN", HOOG, m.group(0), loc,
                                _snippet(text, m.start(), m.end(), m.group(0)),
                                "geldig NL-IBAN (mod-97)"))

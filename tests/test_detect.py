@@ -35,6 +35,26 @@ def test_mod97():
     assert not is_valid_iban_nl("DE02ABNA0123456789")   # geen NL
 
 
+def test_persoonlijke_iban_blijft_hoog():
+    treffers = [f for f in soorten("Terugbetaling op NL02ABNA0123456789 graag", "iban")
+                if f.soort.startswith("IBAN")]
+    assert len(treffers) == 1
+    assert treffers[0].soort == "IBAN" and treffers[0].ernst == HOOG
+
+
+@pytest.mark.parametrize("tekst", [
+    "ABN AMRO IBAN: NL02ABNA0123456789 KvK 12345678 - BTW NL853..B01",
+    "Faasen v. Iterson | IBAN NL02ABNA0123456789 | Handelsregister 12345678",
+    "IBAN NL02ABNA0123456789 BTW NL853000000B01 factuur",
+])
+def test_zakelijke_iban_met_kvk_wordt_apart_gelabeld_en_laag(tekst):
+    treffers = [f for f in soorten(tekst, "iban") if f.soort.startswith("IBAN")]
+    assert len(treffers) == 1
+    assert treffers[0].soort == "IBAN (zakelijk)"
+    assert treffers[0].ernst == LAAG
+    assert "bedrijfsrekening" in treffers[0].opmerking
+
+
 def test_maskering_laat_niets_heel():
     gemaskeerd = mask("111222333")
     assert "111222333" not in gemaskeerd
