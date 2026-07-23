@@ -172,8 +172,8 @@ De beschikbare types:
 | `openraadsinformatie` | raadsinformatie via de landelijke Elasticsearch-API; **de tekst is daar al geëxtraheerd**, dus geen download en snel. Dezelfde bron die de VNG voor haar tweede lijst gebruikt. Dekking en actualiteit verschillen per gemeente | werkend |
 | `parlaeus` / `qualigraf` | raadsinformatie Qualigraf/Parlaeus (**zelfde platform**, twee domeinen). Enumereert de publieke modules (ingekomen stukken, moties, verordeningen, ...) en haalt de bijlagen op. Met `van`/`tot` scan je de **volledige historie**. `robots.txt` = `Disallow: /`, dus draaien mag pas ná crawl-akkoord + SOC/leverancier informeren | werkend |
 | `mijnpublicaties` | terinzageleggingen op [mijnpublicaties.nl](https://mijnpublicaties.nl) (TerInzageLeggingPortaal), **23 gemeenten aangesloten** waaronder Amsterdam, Haarlem, Breda, Zwolle en Zoetermeer. Geen sleutel, geen login, geen `robots.txt`. Zet `organisatie_naam` (exacte naam op de hoofdpagina) of `organisatie` (GUID uit de portaal-URL) | werkend |
-| `notubiz` | raadsinformatie Notubiz | nog niet af — faalt luid ([bouwplan](#bouwen-aan-notubiz-en-ibabs)) |
-| `ibabs` | raadsinformatie iBabs; vereist `sitename` + `api_key` (geen open route) | skelet — faalt luid ([bouwplan](#bouwen-aan-notubiz-en-ibabs)) |
+| `notubiz` | raadsinformatie Notubiz | nog niet af — faalt luid ([bouwplan](#bouwen-aan-notubiz)) |
+| `ibabs` | raadsinformatie iBabs via de **Public WCF Service** (SOAP, geen `api_key`): vereist een `sitename`, IP-whitelisting bij iBabs en een burger-account met view-rechten. Gebouwd tegen het gedocumenteerde contract, verifieer op je eigen site met `ibabs_diagnose.py` | werkend |
 
 Over `mijnpublicaties` twee dingen die je moet weten voordat je de uitkomst leest. Het portaal
 toont alleen wat **op dit moment ter inzage ligt**, geen archief: een lege of kleine uitkomst
@@ -192,9 +192,9 @@ JavaScript-apps waar de crawler niet doorheen komt — daarvoor zijn deze connec
 connector die niet kan draaien **faalt luid** en wordt als 'niet uitgevoerd' gemeld; een
 lege uitkomst betekent hier dus nooit vanzelf 'schoon'.
 
-### Bouwen aan Notubiz en iBabs
+### Bouwen aan Notubiz
 
-Twee connectors zijn nog niet af. Gebruikt jouw gemeente Notubiz of iBabs, dan is dit
+Notubiz is de enige connector die nog niet af is. Gebruikt jouw gemeente Notubiz, dan is dit
 je startpunt — het patroon staat in `avgscan/bronnen.py`: een connector is een generator
 die `Document`-objecten `yield`t (elk met een `url` om te downloaden, óf directe `text`/
 `chunks`), en die **luid faalt** (`raise BronNietGereed(...)`) zodra hij niet kan draaien.
@@ -214,16 +214,13 @@ de **enumeratie** van alle document-id's per gemeente:
 > Sneller alternatief: **Open Raadsinformatie ingest Notubiz al**. Probeer eerst het type
 > `openraadsinformatie` — dan hoef je deze connector misschien niet te bouwen.
 
-**iBabs** — geen open publieke route. Toegang loopt via de iBabs-API (`api.ibabs.eu`) met
-een **sitename + API-sleutel per gemeente**, die je bij je iBabs-beheerder opvraagt. De
-skelet-connector faalt luid zolang die credentials ontbreken. Bouwstappen zodra je ze hebt:
+> **iBabs is inmiddels werkend** via de Public WCF Service (SOAP, `wcf.ibabs.eu`), dankzij een
+> externe bijdrage — je hoeft het niet meer te bouwen. Anders dan het commerciële `api.ibabs.eu`
+> heeft die service **geen API-sleutel** nodig, wel een `sitename`, IP-whitelisting bij iBabs en
+> een burger-account met view-rechten. Gebruik het type `ibabs` in je config en draai
+> `ibabs_diagnose.py` om te zien welke agendatypes je account mag zien.
 
-1. Authenticeer met `sitename` + `api_key` uit de bronconfig.
-2. Enumereer de vergaderingen (`GetMeetings`, op datumvenster) en per vergadering de
-   documenten/bijlagen (`GetMeeting` → documentreferenties).
-3. `yield Document(...)` met de download-URL of, als de API bytes teruggeeft, met `text`.
-
-Voor beide geldt: een module/endpoint die niets teruggeeft mag je stil overslaan
+Ook hier geldt: een module/endpoint die niets teruggeeft mag je stil overslaan
 ('niet aanwezig'), maar een connector die zijn werk niet kán doen moet **luid falen** —
 nooit stil een lege lijst, want dat leest als 'schoon'.
 
