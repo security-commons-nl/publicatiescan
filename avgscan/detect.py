@@ -211,6 +211,35 @@ _ARTIKEL_VOOR_RE = re.compile(r"\bartikel\s*$", re.IGNORECASE)
 _TEKENING_VOOR_RE = re.compile(
     r"\b(?:situatie|bouw|overzicht|detail|constructie)?tekening(?:nummer)?\s*:?\s*$",
     re.IGNORECASE)
+
+# --- Ruis uit de bijlagen-scan (23-07-2026, herrun met externe bijlagen) ---
+# Externe bijlagen bij omgevingsvergunningen zijn vaak technische tekeningen en
+# aansluitschema's. Twee categorieën leverden daar het leeuwendeel van de valse
+# Kritiek-hits:
+#   1. RD-coördinaten (Rijksdriehoeksmeting): een Y-coördinaat ligt rond 4.6xx.xxx
+#      en doorstaat geregeld toevallig de elfproef. Herkenbaar aan 'Coördinaat',
+#      'bovenhoek', 'RD-stelsel' of een 'X:'/'Y:'-label vlakbij.
+#   2. Project-/document-/referentienummers op tekeningkaders en rapportbijlagen.
+# Beide worden afgewaardeerd, NOOIT weggegooid. Een expliciete BSN-term vlakbij wint
+# altijd (zie bovenaan _bsn_reden), dus een echt BSN in zo'n document blijft Kritiek.
+_COORD_RE = re.compile(
+    r"co[oö]rdina|rd-stelsel|rijksdriehoek|bovenhoek|onderhoek|\b[XY]\s*[:=]", re.IGNORECASE)
+_PROJECTNR_RE = re.compile(
+    r"projectnummer|documentnummer|referentiecode|referentienummer|\bwerknr\b", re.IGNORECASE)
+
+
+def bsn_context_ruis(fragment: str) -> str:
+    """Reden waarom een elfproef-geldige reeks in dit tekstfragment geen BSN is, of ''.
+
+    Werkt op een tekstfragment rond de match, zodat dezelfde logica bruikbaar is in de
+    live-scan (_bsn_reden) én achteraf op een reeds opgeslagen (gemaskeerd) contextfragment:
+    maskering raakt alleen cijfers, de signaalwoorden blijven staan.
+    """
+    if _COORD_RE.search(fragment):
+        return "onderdeel van een RD-coördinaat op een technische tekening — geen BSN"
+    if _PROJECTNR_RE.search(fragment):
+        return "onderdeel van een project-/document-/referentienummer — geen BSN"
+    return ""
 # '.RAP003' direct achter een documentnummer: rapportbijlage van een adviesbureau, geen
 # identiteitsbewijs (17-07-2026: 'Documentnummer: SOB0xxxxx.RAP003, WSP Nederland B.V.').
 _RAPPORTNR_NA_RE = re.compile(r"^\s?\.\s?[A-Za-z]{2,8}\d*\b")
@@ -251,6 +280,11 @@ def _bsn_reden(text: str, start: int, end: int, matched: str) -> str:
         return "artikelnummer uit een regeling, geen BSN"
     if _TEKENING_VOOR_RE.search(voor):
         return "tekeningnummer bij een besluit, geen BSN"
+    # Coördinaat/project-nummer-context (technische bijlagen): kijk iets ruimer om de
+    # match heen, want het signaalwoord staat soms vóór en soms net achter de reeks.
+    ruis = bsn_context_ruis(text[max(0, start - 45):end + 15])
+    if ruis:
+        return ruis
     if _is_getaltabel(text, start, end):
         return "cijfer uit een getallentabel — geen BSN"
     return ""

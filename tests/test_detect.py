@@ -217,6 +217,38 @@ def test_bekendmakingen_ruis_wordt_afgewaardeerd(tekst, brok):
     assert brok in treffers[0].opmerking
 
 
+# De ruiscategorieën uit de bijlagen-herrun (23-07-2026): technische tekeningen bij
+# omgevingsvergunningen. RD-coördinaten (Y rond 4.6xx.xxx) en tekening-/projectnummers
+# doorstaan geregeld toevallig de elfproef.
+@pytest.mark.parametrize("tekst,brok", [
+    ("Coördinaat rechterbovenhoek: (930123, 111222333) 1:500 Nwe aansluiting", "coördinaat"),
+    ("Kast Staka X: 92020 Y: 111222333, aansluiting C3 HDPE25", "coördinaat"),
+    ("Coördinaten RD-stelsel X = Y = 111222333, MRSV v4.01", "coördinaat"),
+    ("Uw referentiecode werknr. 111222333, ingediend op 20-12", "referentie"),
+    ("projectnummer 111222333, status definitief bouwtekening", "project-"),
+])
+def test_technische_bijlage_ruis_wordt_afgewaardeerd(tekst, brok):
+    treffers = [t for t in soorten(tekst, "bsn") if t.soort == "BSN"]
+    assert len(treffers) == 1                     # niet weggegooid...
+    assert treffers[0].ernst == LAAG              # ...maar wel uit de triagelijst
+    assert brok in treffers[0].opmerking
+
+
+def test_coordinaat_ruis_verliest_van_expliciete_bsn_term():
+    # Een echt BSN op een tekening (met de term erbij) mag NIET wegvallen als coördinaat.
+    treffers = [t for t in soorten("Coördinaat X: 92020 Burgerservicenummer 111222333 aanvrager", "bsn")
+                if t.soort == "BSN"]
+    assert treffers[0].ernst == KRITIEK
+
+
+def test_bsn_context_ruis_werkt_op_gemaskeerd_fragment():
+    # Post-hoc herclassificatie draait op de opgeslagen (gemaskeerde) context; de
+    # signaalwoorden overleven maskering (alleen cijfers worden gemaskeerd).
+    from avgscan.detect import bsn_context_ruis
+    assert "coördinaat" in bsn_context_ruis("bovenhoek: (93*****23,46******57) 1:500").lower()
+    assert bsn_context_ruis("Burgerservicenummer 16*****73 Geslacht Man") == ""   # geen ruis-woord
+
+
 def test_artikelnummer_verliest_van_expliciete_bsn_term():
     # De BSN-term wint altijd: 'artikel' vlakbij mag een echt BSN niet wegfilteren.
     treffers = [t for t in soorten("Artikel 5 noemt BSN 111222333 van betrokkene", "bsn")
