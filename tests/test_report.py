@@ -62,6 +62,21 @@ def test_geen_intro_geen_leeg_blok():
     assert '<div class="intro">' not in open(pad, encoding="utf-8").read()
 
 
+def test_extra_kolommen_html_en_excel(tmp_path):
+    import openpyxl
+    # rijen met 3 extra velden achter de 8 basisvelden
+    rijen = [r + ("Leiden", "dakkapel", "Omgevingsvergunning") for r in _RIJEN]
+    hpad = str(tmp_path / "r.html")
+    report.write_html(rijen, hpad, 4, 0, extra_headers=["Gemeente", "Onderwerp", "Vergunning"])
+    doc = open(hpad, encoding="utf-8").read()
+    assert "<th>Gemeente</th>" in doc and "<th>Vergunning</th>" in doc
+    assert "Omgevingsvergunning" in doc            # extra kolom bij de Hoog-rij
+    xpad = str(tmp_path / "r.xlsx")
+    report.write_excel(rijen, xpad, extra_headers=["Gemeente", "Onderwerp", "Vergunning"])
+    ws = openpyxl.load_workbook(xpad).active
+    assert ws.cell(1, 9).value == "Gemeente" and ws.cell(1, 11).value == "Vergunning"
+
+
 def test_excel_houdt_alles():
     import openpyxl
     d = tempfile.mkdtemp()

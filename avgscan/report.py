@@ -16,11 +16,16 @@ def _sorted(rows):
     return sorted(rows, key=lambda r: (SEVERITY_ORDER.get(r[3], 9), r[2], r[0]))
 
 
-def write_html(rows, out_path, scanned_files, scanned_pages, intro_html=None):
+def write_html(rows, out_path, scanned_files, scanned_pages, intro_html=None, extra_headers=None):
     """Schrijf het HTML-rapport. `intro_html` (optioneel) is een blok ruwe HTML dat
     bovenaan komt: bedoeld voor een organisatie-specifieke management-samenvatting
     (bronnen, werkwijze, duiding). Het staat los van de tool zodat het rapport zelf
-    generiek en herbruikbaar blijft; avg_scan vult het vanuit output_dir/intro.html."""
+    generiek en herbruikbaar blijft; avg_scan vult het vanuit output_dir/intro.html.
+
+    `extra_headers` (optioneel): kolomtitels voor extra velden. Rijen mogen dan langer
+    zijn dan de 8 basisvelden; alles ná index 8 wordt als extra kolom getoond (bv.
+    gemeente, onderwerp, vergunningtype voor routing naar het juiste team)."""
+    extra_headers = extra_headers or []
     rows = _sorted(rows)
     tel = {}
     for r in rows:
@@ -51,9 +56,12 @@ def write_html(rows, out_path, scanned_files, scanned_pages, intro_html=None):
     n_samengevat = sum(len(v) for v in samengevat.values())
 
     trs = []
-    for url, path, soort, ernst, waarde, loc, ctx, opm in rows:
+    for r in rows:
+        url, path, soort, ernst, waarde, loc, ctx, opm = r[:8]
+        extra = r[8:]
         kleur = _ERNST_KLEUR.get(ernst, "#5a5a5a")
         bestand = html.escape(os.path.basename(path or ""))
+        extra_td = "".join(f"<td>{html.escape(str(x) if x is not None else '')}</td>" for x in extra)
         trs.append(
             f"<tr>"
             f"<td class='ernst' style='color:{kleur}'>{html.escape(ernst)}</td>"
@@ -63,8 +71,10 @@ def write_html(rows, out_path, scanned_files, scanned_pages, intro_html=None):
             f"<td><a href='{html.escape(url)}'>{html.escape(url)}</a><div class='sub'>{bestand}</div></td>"
             f"<td class='ctx'>{html.escape(ctx)}</td>"
             f"<td class='sub'>{html.escape(opm)}</td>"
+            f"{extra_td}"
             f"</tr>"
         )
+    extra_th = "".join(f"<th>{html.escape(h)}</th>" for h in extra_headers)
 
     doc = f"""<!doctype html><html lang="nl"><head><meta charset="utf-8">
 <title>AVG Publicatie Scanner — bevindingen {date.today().isoformat()}</title>
@@ -104,8 +114,8 @@ def write_html(rows, out_path, scanned_files, scanned_pages, intro_html=None):
  Laag staan samengevat; de volledige lijst met alle rijen staat in rapport.xlsx.{samenvatting_html}
 </div>
 <table>
-<tr><th>Ernst</th><th>Soort</th><th>Waarde (gemaskeerd)</th><th>Locatie</th><th>Bron</th><th>Context</th><th>Opmerking</th></tr>
-{''.join(trs) if trs else '<tr><td colspan=7>Geen Kritiek- of Hoog-bevindingen.</td></tr>'}
+<tr><th>Ernst</th><th>Soort</th><th>Waarde (gemaskeerd)</th><th>Locatie</th><th>Bron</th><th>Context</th><th>Opmerking</th>{extra_th}</tr>
+{''.join(trs) if trs else f'<tr><td colspan={7 + len(extra_headers)}>Geen Kritiek- of Hoog-bevindingen.</td></tr>'}
 </table>
 </main></body></html>"""
     with open(out_path, "w", encoding="utf-8") as f:
@@ -123,22 +133,25 @@ def _excel_veilig(v):
     return _STUURTEKENS.sub("", v)
 
 
-def write_excel(rows, out_path):
+def write_excel(rows, out_path, extra_headers=None):
     import openpyxl
     from openpyxl.styles import Font, PatternFill
 
+    extra_headers = extra_headers or []
     rows = _sorted(rows)
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Bevindingen"
     kop = ["Ernst", "Soort", "Waarde (gemaskeerd)", "Locatie", "URL", "Bestand", "Context", "Opmerking"]
+    kop += list(extra_headers)
     ws.append(kop)
     for c in ws[1]:
         c.font = Font(bold=True, color="FFFFFF")
         c.fill = PatternFill("solid", fgColor="1F4E79")
-    for url, path, soort, ernst, waarde, loc, ctx, opm in rows:
-        ws.append([_excel_veilig(v) for v in
-                   (ernst, soort, waarde, loc, url, os.path.basename(path or ""), ctx, opm)])
+    for r in rows:
+        url, path, soort, ernst, waarde, loc, ctx, opm = r[:8]
+        basis = (ernst, soort, waarde, loc, url, os.path.basename(path or ""), ctx, opm)
+        ws.append([_excel_veilig(v) for v in (basis + tuple(r[8:]))])
     for col, breedte in zip("ABCDEFGH", (10, 20, 22, 18, 55, 30, 45, 30)):
         ws.column_dimensions[col].width = breedte
     ws.freeze_panes = "A2"
