@@ -23,18 +23,28 @@ def write_html(rows, out_path, scanned_files, scanned_pages):
         tel[r[3]] = tel.get(r[3], 0) + 1
     chips = " · ".join(f"{k}: {v}" for k, v in sorted(tel.items(), key=lambda kv: SEVERITY_ORDER.get(kv[0], 9)))
 
-    # De HTML is het triage-document: Kritiek/Hoog/Middel als rijen. Laag is per
-    # definitie de verwachte ruis (onderwerp-adressen, eigen werkadressen, vaste
-    # nummers) en bestaat op een volledige historie uit tienduizenden rijen; die
-    # maken het bestand tientallen MB's groot en onbruikbaar in een browser. Laag
-    # wordt daarom NIET als rijen getoond maar als telling per soort, met de
-    # volledige lijst in het Excel-rapport — samengevat, niet stil weggelaten.
-    laag = [r for r in rows if r[3] == "Laag"]
-    rows = [r for r in rows if r[3] != "Laag"]
-    laag_tel = {}
-    for r in laag:
-        laag_tel[r[2]] = laag_tel.get(r[2], 0) + 1
-    laag_regel = " · ".join(f"{k}: {v}" for k, v in sorted(laag_tel.items(), key=lambda kv: -kv[1]))
+    # De HTML is het PRIORITEITSdocument: alleen Kritiek en Hoog als rijen — dat zijn de
+    # vermoedelijke lekken (BSN, naam+woonadres) die stuk voor stuk beoordeeld moeten
+    # worden. Middel en Laag bestaan op een volledige historie uit tienduizenden rijen
+    # (afwijkende adressen, aanhef-namen, e-mail, verwachte ruis); als rijen maken die
+    # het bestand tientallen MB's groot en onbruikbaar in een browser. Ze worden daarom
+    # per ernst als telling-per-soort getoond, met de volledige lijst in het Excel-rapport
+    # — samengevat, nooit stil weggelaten. Wie op adres-niveau wil triëren gebruikt Excel.
+    SAMENVATTEN = ("Middel", "Laag")
+    samengevat = {e: [r for r in rows if r[3] == e] for e in SAMENVATTEN}
+    rows = [r for r in rows if r[3] not in SAMENVATTEN]
+
+    def _per_soort(lst):
+        t = {}
+        for r in lst:
+            t[r[2]] = t.get(r[2], 0) + 1
+        return " · ".join(f"{k}: {v}" for k, v in sorted(t.items(), key=lambda kv: -kv[1]))
+
+    samenvatting_html = "".join(
+        f'<br><b>{e} ({len(samengevat[e])}):</b> '
+        f'<span class="sub">{html.escape(_per_soort(samengevat[e])) or "geen"}</span>'
+        for e in SAMENVATTEN if samengevat[e])
+    n_samengevat = sum(len(v) for v in samengevat.values())
 
     trs = []
     for url, path, soort, ernst, waarde, loc, ctx, opm in rows:
@@ -75,18 +85,17 @@ def write_html(rows, out_path, scanned_files, scanned_pages):
 <div class="sub">Intern werkdocument · bevat mogelijk persoonsgegevens · gegenereerd {date.today().isoformat()}</div>
 <div class="band"></div>
 <div class="meta">
- <b>{len(rows) + len(laag)}</b> bevindingen in <b>{scanned_files}</b> geanalyseerde documenten
+ <b>{len(rows) + n_samengevat}</b> bevindingen in <b>{scanned_files}</b> geanalyseerde documenten
  ({scanned_pages} pagina's gecrawld).<br>Verdeling: {html.escape(chips) or "geen"}.<br>
  <b>Let op:</b> waarden zijn gemaskeerd; elke hit vergt handmatige context-beoordeling
  (bestuurder/burger/medewerker/leverancier · bewust gepubliceerd vs. datalek).
  BSN-hits zijn gevalideerd met de elfproef, IBAN met mod-97.<br>
- <b>Laag ({len(laag)}):</b> hieronder samengevat, niet als rijen (verwachte ruis; houdt dit
- bestand bruikbaar). Volledige lijst: rapport.xlsx.
- <span class="sub">{html.escape(laag_regel) or "geen"}</span>
+ Hieronder alleen <b>Kritiek</b> en <b>Hoog</b> als rijen (de vermoedelijke lekken). Middel en
+ Laag staan samengevat; de volledige lijst met alle rijen staat in rapport.xlsx.{samenvatting_html}
 </div>
 <table>
 <tr><th>Ernst</th><th>Soort</th><th>Waarde (gemaskeerd)</th><th>Locatie</th><th>Bron</th><th>Context</th><th>Opmerking</th></tr>
-{''.join(trs) if trs else '<tr><td colspan=7>Geen bevindingen (boven Laag).</td></tr>'}
+{''.join(trs) if trs else '<tr><td colspan=7>Geen Kritiek- of Hoog-bevindingen.</td></tr>'}
 </table>
 </main></body></html>"""
     with open(out_path, "w", encoding="utf-8") as f:
