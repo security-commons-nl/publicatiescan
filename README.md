@@ -217,8 +217,8 @@ de **enumeratie** van alle document-id's per gemeente:
 > **iBabs is inmiddels werkend** via de Public WCF Service (SOAP, `wcf.ibabs.eu`), dankzij een
 > externe bijdrage — je hoeft het niet meer te bouwen. Anders dan het commerciële `api.ibabs.eu`
 > heeft die service **geen API-sleutel** nodig, wel een `sitename`, IP-whitelisting bij iBabs en
-> een burger-account met view-rechten. Gebruik het type `ibabs` in je config en draai
-> `ibabs_diagnose.py` om te zien welke agendatypes je account mag zien.
+> een burger-account met view-rechten. Gebruik het type `ibabs` in je config (installeer eerst
+> `pip install zeep`) en draai `ibabs_diagnose.py` om te zien welke agendatypes je account mag zien.
 
 Ook hier geldt: een module/endpoint die niets teruggeeft mag je stil overslaan
 ('niet aanwezig'), maar een connector die zijn werk niet kán doen moet **luid falen** —
