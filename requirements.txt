@@ -8,6 +8,7 @@ openpyxl>=3.1        # .xlsx lezen + Excel-rapport schrijven
 python-pptx>=0.6.23  # .pptx
 tqdm>=4.66           # voortgangsbalk
 PyYAML>=6.0          # config
+zeep>=4.2            # SOAP-client voor de iBabs Public WCF Service (bron: ibabs)
 
 # Optioneel — alleen nodig voor OCR (ocr.enabled / --ocr): ingescande documenten
 # zonder tekstlaag alsnog lezen. Zwaar (onnxruntime), daarom niet in de basis-install:

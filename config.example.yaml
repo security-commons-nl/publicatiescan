@@ -60,8 +60,11 @@ gemeenten:
 #                                  betekent dus niet 'schoon verleden' — gebruik sru voor historie.
 #   notubiz             deels    — nog niet af (enumeratie van document-id's); faalt luid.
 #                                  Bouwplan staat in de README.
-#   ibabs               skelet   — vereist sitename + API-sleutel; faalt luid zonder credentials.
-#                                  Bouwplan staat in de README.
+#   ibabs               werkend* — iBabs-raadsinformatie via de Public WCF Service (SOAP).
+#                                  Vereist alleen een 'sitename' + IP-whitelisting bij iBabs
+#                                  + een burger-account met view-rechten (GEEN api_key).
+#                                  *tegen het gedocumenteerde contract gebouwd; verifieer op
+#                                  je eigen site (de WSDL is IP-restricted, niet publiek).
 #
 # Een connector die niet kan draaien faalt LUID en wordt als 'niet uitgevoerd' gemeld —
 # nooit stil als 'niets gevonden'. Een lege uitkomst mag nooit 'schoon' betekenen.
@@ -88,6 +91,18 @@ bronnen:
   #   type: mijnpublicaties
   #   organisatie_naam: "Gemeente Jouwgemeente"   # exacte naam op mijnpublicaties.nl
   #   # organisatie: 00000000-0000-0000-0000-000000000000   # of de GUID uit de portaal-URL
+  #
+  # - naam: raadsinformatie-iBabs      # iBabs Public WCF Service (SOAP) — geen api_key
+  #   type: ibabs
+  #   sitename: "jouwsite"             # je iBabs-site
+  #   sinds: "2026-06-01"              # optioneel: alleen sindsdien gewijzigde agenda's
+  #   # vanaf: "2014-01-01"            # of een publicatievenster (met 'tot')
+  #   # tot:   "2026-12-31"
+  #   # meetingtypes: ["Raadsplein"]   # optioneel: alleen deze agendatypes (naam of Id).
+  #                                    # Combineerbaar met sinds/vanaf/tot. Draai
+  #                                    # ibabs_diagnose.py voor de namen van je site.
+  #   # Vooraf: geef je uitgaande IP door aan iBabs (whitelisting) en zorg dat het
+  #   # burger-account 'view'-rechten heeft op de agendatypes die je wilt scannen.
   #
   # - naam: website-bijlagen
   #   type: crawl
