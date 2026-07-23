@@ -226,6 +226,10 @@ def test_bekendmakingen_ruis_wordt_afgewaardeerd(tekst, brok):
     ("Coördinaten RD-stelsel X = Y = 111222333, MRSV v4.01", "coördinaat"),
     ("Uw referentiecode werknr. 111222333, ingediend op 20-12", "referentie"),
     ("projectnummer 111222333, status definitief bouwtekening", "project-"),
+    ("In behandeling 23072-111222333-DO-DET-01.pdf Bestemmingsplan", "bestandsnaam"),
+    ("Wethouders van Leiden BV. Z20/111222333, besluit", "zaakkenmerk"),
+    ("Domein Globaal belasting staaf 111222333, [mm] volgende regel", "constructieberekening"),
+    ("title: bouwhist rapportage 111222333 author: PDFCreator", "metadata"),
 ])
 def test_technische_bijlage_ruis_wordt_afgewaardeerd(tekst, brok):
     treffers = [t for t in soorten(tekst, "bsn") if t.soort == "BSN"]

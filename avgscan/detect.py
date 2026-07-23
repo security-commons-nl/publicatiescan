@@ -226,6 +226,14 @@ _COORD_RE = re.compile(
     r"co[oö]rdina|rd-stelsel|rijksdriehoek|bovenhoek|onderhoek|\b[XY]\s*[:=]", re.IGNORECASE)
 _PROJECTNR_RE = re.compile(
     r"projectnummer|documentnummer|referentiecode|referentienummer|\bwerknr\b", re.IGNORECASE)
+# Nummer in een bestandsnaam/-lijst (tekeningen, berekeningen als bijlage-index).
+_BESTANDSNAAM_RE = re.compile(r"\.(?:pdf|dwg|docx?|xlsx?|dwf)\b", re.IGNORECASE)
+# Zaakkenmerk met cijfers vóór de slash: "Z20/…", "BV12/…" (miste de letter-only prefix-filter).
+_KENMERK_SLASH_RE = re.compile(r"\b[A-Za-z]{1,4}\d{1,4}\s*/")
+# Constructieberekening / FEM-uitvoer: getallenmatrix met domein-/mm-labels.
+_REKENTABEL_RE = re.compile(r"domein\s+globaal|\[mm\]|daktype|windgebied|belasting\s*staaf", re.IGNORECASE)
+# PDF-metadata-kop: een reeks in de title/author/creator hoort bij het bestand, niet bij een persoon.
+_METADATA_KOP_RE = re.compile(r"\b(?:title|author|creator|producer|subject)\s*:", re.IGNORECASE)
 
 
 def bsn_context_ruis(fragment: str) -> str:
@@ -234,11 +242,23 @@ def bsn_context_ruis(fragment: str) -> str:
     Werkt op een tekstfragment rond de match, zodat dezelfde logica bruikbaar is in de
     live-scan (_bsn_reden) én achteraf op een reeds opgeslagen (gemaskeerd) contextfragment:
     maskering raakt alleen cijfers, de signaalwoorden blijven staan.
+
+    Alle categorieën hier zijn MECHANISCHE herkomst (tekening, bestandsnaam, kenmerk,
+    berekening, metadata) — nooit een persoonsgegeven. Een expliciete BSN-term vlakbij
+    wint altijd (zie bovenaan _bsn_reden), dus een echt BSN blijft Kritiek.
     """
     if _COORD_RE.search(fragment):
         return "onderdeel van een RD-coördinaat op een technische tekening — geen BSN"
     if _PROJECTNR_RE.search(fragment):
         return "onderdeel van een project-/document-/referentienummer — geen BSN"
+    if _BESTANDSNAAM_RE.search(fragment):
+        return "onderdeel van een bestandsnaam in een documentenlijst — geen BSN"
+    if _KENMERK_SLASH_RE.search(fragment):
+        return "onderdeel van een zaakkenmerk (code/jaar) — geen BSN"
+    if _REKENTABEL_RE.search(fragment):
+        return "getal uit een constructieberekening — geen BSN"
+    if _METADATA_KOP_RE.search(fragment):
+        return "reeks in de PDF-metadata (title/author) — geen BSN"
     return ""
 # '.RAP003' direct achter een documentnummer: rapportbijlage van een adviesbureau, geen
 # identiteitsbewijs (17-07-2026: 'Documentnummer: SOB0xxxxx.RAP003, WSP Nederland B.V.').
