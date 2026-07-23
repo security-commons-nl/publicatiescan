@@ -298,10 +298,20 @@ afweging daar.
 
 ## Wat het niet doet
 
-**Gescande PDF's zonder tekstlaag.** Een ingescande brief is voor deze tool een
-plaatje. Ze worden geteld en gemarkeerd als OCR-kandidaat, maar niet gelezen. Juist
-daar zit vaak het risico — een gescande handtekening onder een formulier. OCR staat op
-de lijst voor fase 2.
+**Gescande PDF's zonder tekstlaag.** Een ingescande brief is voor deze tool standaard
+een plaatje. Ze worden geteld en gemarkeerd als OCR-kandidaat. Wil je ze wél lezen, zet
+dan **OCR** aan (`ocr.enabled: true` in de config, of de vlag `--ocr`). Dat gebeurt
+on-prem via rapidocr — geen externe aanroep, dus de persoonsgegevens blijven op je eigen
+machine. Installeer daarvoor de extra dependency:
+
+```bash
+pip install rapidocr-onnxruntime
+```
+
+Let op: OCR is **traag** (seconden per pagina) en niet bit-identiek reproduceerbaar zoals
+de gewone tekstlaag. Bevindingen uit OCR krijgen de locatie `"pagina N (OCR)"`, zodat de
+triage ziet dat zo'n hit een extra kritische blik verdient. Juist hier zit vaak het risico:
+een gescand, ondertekend formulier met een BSN erop.
 
 **Documenten die niet online staan.** Vergunningdossiers met situatietekeningen en
 ondertekende formulieren staan bij veel gemeenten niet in een portaal maar worden op

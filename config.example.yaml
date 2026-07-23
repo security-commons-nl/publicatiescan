@@ -146,6 +146,22 @@ limits:
 # ---------------------------------------------------------------------------
 # 6. Detectie
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 7. OCR (optioneel) — ingescande documenten zonder tekstlaag alsnog lezen
+# ---------------------------------------------------------------------------
+# Een ingescande brief/formulier is voor de gewone extractie een plaatje. Juist
+# daar zit soms het risico (een BSN op een gescand formulier). Met OCR aan worden
+# die beeld-pagina's alsnog gelezen. On-prem via rapidocr (geen externe aanroep,
+# persoonsgegevens blijven op de machine). LET OP: OCR is TRAAG (seconden per
+# pagina) en niet bit-identiek reproduceerbaar; bevindingen worden gelabeld als
+# "(OCR)". Vereist de extra install:  pip install rapidocr-onnxruntime
+ocr:
+  enabled: false                  # standaard uit; of gebruik de vlag --ocr
+  dpi: 300                        # renderresolutie voor OCR (hoger = trager, scherper)
+  min_confidence: 0.5             # tekst onder deze zekerheid wordt genegeerd (OCR-ruis)
+  max_pages_per_doc: 20           # cap per document (voorkomt dat één dik PDF de run ophoudt)
+
+
 detectors:
   bsn: true                       # 9-cijferige reeks, gevalideerd met de elfproef
   iban: true                      # NL-IBAN, gevalideerd met mod-97

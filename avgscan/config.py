@@ -26,6 +26,13 @@ class Config:
 
         self.detectors = d.get("detectors", {})
 
+        # OCR (optioneel, opt-in). Beeld-zonder-tekstlaag alsnog lezen via rapidocr (on-prem).
+        ocr = d.get("ocr", {})
+        self.ocr_enabled = bool(ocr.get("enabled", False))
+        self.ocr_dpi = int(ocr.get("dpi", 300))
+        self.ocr_min_confidence = float(ocr.get("min_confidence", 0.5))
+        self.ocr_max_pages = int(ocr.get("max_pages_per_doc", 20))
+
         # Meerbronnige modus: een lijst bronnen, elk met een 'type' (zie avgscan/bronnen.py)
         # en typespecifieke parameters. Leeg = oude enkelvoudige modus (seeds/SRU).
         self.bronnen = [b for b in (d.get("bronnen") or []) if isinstance(b, dict) and b.get("type")]

@@ -223,6 +223,8 @@ def main(argv=None):
     ap.add_argument("--sru-until", default=None,
                     help="alleen records met dt.modified <= JJJJ-MM-DD; samen met --sru-since "
                          "een tijdvenster (per jaar slicen omzeilt de diepe-pagineringsfout van KOOP)")
+    ap.add_argument("--ocr", action="store_true",
+                    help="OCR aanzetten: beeld-zonder-tekstlaag alsnog lezen (rapidocr, on-prem, traag)")
     args = ap.parse_args(argv)
 
     if not os.path.exists(args.config):
@@ -243,6 +245,9 @@ def main(argv=None):
         sys.exit("Geen gemeenten opgegeven. Vul 'gemeenten:' in de config of gebruik --sru-creators.")
 
     set_eigen_domeinen(cfg.eigen_domeinen)
+    extract.configure_ocr(
+        enabled=cfg.ocr_enabled or args.ocr, dpi=cfg.ocr_dpi,
+        min_confidence=cfg.ocr_min_confidence, max_pages_per_doc=cfg.ocr_max_pages)
 
     os.makedirs(cfg.output_dir, exist_ok=True)
     st = State(os.path.join(cfg.output_dir, "state.db"))

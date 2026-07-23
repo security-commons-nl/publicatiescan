@@ -8,6 +8,50 @@ from __future__ import annotations
 
 import os
 
+# --------------------------------------------------------------------------------------
+# OCR (optioneel, opt-in). Beeld-zonder-tekstlaag (een ingescande brief/formulier) is voor
+# de gewone extractie een plaatje; juist daar zit soms het risico (een BSN op een gescand
+# formulier). Met OCR aan worden die pagina's alsnog gelezen. On-prem via rapidocr
+# (onnxruntime): geen externe aanroep, dus de persoonsgegevens blijven op de machine.
+# OCR is TRAAG (seconden per pagina) en niet bit-identiek reproduceerbaar zoals de
+# tekstlaag; daarom standaard uit en per bevinding zichtbaar gelabeld als "(OCR)".
+_OCR = {"enabled": False, "dpi": 300, "min_conf": 0.5, "max_pages": 20}
+_ocr_engine = None
+
+
+def configure_ocr(enabled=False, dpi=300, min_confidence=0.5, max_pages_per_doc=20):
+    """Zet OCR aan/uit en stel de parameters in (aangeroepen bij het opstarten)."""
+    _OCR.update(enabled=bool(enabled), dpi=int(dpi),
+                min_conf=float(min_confidence), max_pages=int(max_pages_per_doc))
+
+
+def _get_ocr_engine():
+    global _ocr_engine
+    if _ocr_engine is None:
+        from rapidocr_onnxruntime import RapidOCR   # zware, optionele dependency: lazy
+        _ocr_engine = RapidOCR()
+    return _ocr_engine
+
+
+def _ocr_page(page) -> str:
+    """OCR één PDF-pagina (PyMuPDF-page) en geef de herkende tekst terug.
+
+    Alleen tekst boven de confidence-drempel telt mee; rommel met lage zekerheid
+    (typisch OCR-ruis op tekeningen) valt zo af.
+    """
+    import numpy as np
+
+    pix = page.get_pixmap(dpi=_OCR["dpi"])
+    arr = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
+    if pix.n == 4:
+        arr = arr[:, :, :3]            # alpha weg
+    elif pix.n == 1:
+        arr = np.repeat(arr, 3, axis=2)  # grijswaarde -> 3 kanalen
+    res, _ = _get_ocr_engine()(arr)
+    if not res:
+        return ""
+    return " ".join(t for _box, t, conf in res if float(conf) >= _OCR["min_conf"])
+
 
 def _schoon(s):
     """Verwijder ongeldige Unicode (lone surrogates) uit geëxtraheerde tekst.
@@ -52,15 +96,26 @@ def _pdf(path):
     with fitz.open(path) as doc:
         meta = {k: v for k, v in (doc.metadata or {}).items() if v}
         pages_met_beeld = 0
+        ocr_gedaan = 0
         for i, page in enumerate(doc, start=1):
             txt = page.get_text("text")
             if txt.strip():
                 chunks.append((f"pagina {i}", txt))
             elif page.get_images():
                 pages_met_beeld += 1
+                # Beeld zonder tekstlaag: met OCR aan alsnog lezen, gelabeld als (OCR).
+                if _OCR["enabled"] and ocr_gedaan < _OCR["max_pages"]:
+                    try:
+                        otxt = _ocr_page(page)
+                    except Exception:
+                        otxt = ""       # OCR-fout mag de run niet stoppen
+                    if otxt.strip():
+                        chunks.append((f"pagina {i} (OCR)", otxt))
+                        ocr_gedaan += 1
         if pages_met_beeld:
-            # Beeld zonder tekstlaag = kandidaat voor OCR (fase 2).
             meta["_ocr_kandidaat_paginas"] = pages_met_beeld
+        if ocr_gedaan:
+            meta["_ocr_gelezen_paginas"] = ocr_gedaan
     return chunks, meta
 
 
