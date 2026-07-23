@@ -359,15 +359,51 @@ def _parlaeus(bron, session, cfg):
 
 
 def _ibabs(bron, session, cfg):
-    # iBabs heeft geen open publieke document-API: toegang loopt via de SOAP-API
-    # (api.ibabs.eu) met een sitename + sleutel per gemeente. Zonder die credentials is er
-    # niets te scannen. Geen enkele Leidse-regio-gemeente gebruikt iBabs.
-    if not (bron.get("sitename") and bron.get("api_key")):
+    """iBabs-raadsinformatie via de Public WCF Service (SOAP, wcf.ibabs.eu).
+
+    Anders dan de commerciele api.ibabs.eu heeft deze GEEN api_key nodig: toegang loopt
+    via een 'sitename', IP-whitelisting (geef je uitgaande IP door aan iBabs) en een
+    burger-account met 'view'-rechten dat server-side in iBabs Maintenance is ingesteld.
+    Alleen wat die burger mag zien komt terug — dus publiek bedoeld materiaal.
+
+    Config:
+        - type: ibabs
+          naam: "Raadsinformatie iBabs"
+          sitename: "jouwsite"          # je iBabs-site
+          # optioneel tijdvenster / incrementeel:
+          sinds: "2026-06-01"           # alleen sinds deze datum gewijzigde agenda's
+          vanaf: "2014-01-01"           # of een publicatievenster (met 'tot')
+          tot:   "2026-12-31"
+          meetingtypes: ["Raadsplein: Agenda en raadsstukken"]   # of het Id, bv. "10000000"
+          # 'meetingtypes' is combineerbaar met sinds/vanaf/tot: zo scan je gericht
+          # één agendatype binnen een venster. Namen zijn hoofdletterongevoelig; een
+          # onbekende waarde faalt luid met de lijst beschikbare types.
+          # Draai ibabs_diagnose.py voor de namen en Id's van je eigen site.
+          # wsdl: "https://wcf.ibabs.eu/api/Public.svc?wsdl"   # override indien nodig
+
+    Faalt LUID (BronNietGereed) bij ontbrekende sitename, ontbrekende zeep-client of een
+    onbereikbare/foutieve service — nooit stil een lege lijst.
+    """
+    from avgscan import ibabs
+
+    sitename = bron.get("sitename")
+    if not sitename:
         raise BronNietGereed(
-            "ibabs vereist 'sitename' + 'api_key' in de bronconfig (SOAP-API api.ibabs.eu); "
-            "er is geen open publieke route. Geen Leidse-regio-gemeente gebruikt iBabs.")
-    raise BronNietGereed("ibabs-connector met credentials nog niet geïmplementeerd")
-    yield  # pragma: no cover
+            "ibabs vereist 'sitename' in de bronconfig (Public WCF Service, wcf.ibabs.eu). "
+            "Geen api_key nodig, maar wel IP-whitelisting bij iBabs en een burger-account "
+            "met 'view'-rechten.")
+    naam = bron.get("naam", "ibabs")
+    try:
+        for rec in ibabs.harvest(
+                session, sitename,
+                wsdl=bron.get("wsdl", ibabs.DEFAULT_WSDL),
+                vanaf=bron.get("vanaf"), tot=bron.get("tot"), sinds=bron.get("sinds"),
+                meetingtypes=bron.get("meetingtypes"),
+                delay=cfg.delay_seconds, timeout=cfg.timeout_seconds):
+            yield Document(bron=naam, url=rec["url"], ext=rec["ext"],
+                           doc_id=rec["doc_id"], titel=rec["titel"], meta=rec["meta"])
+    except ibabs.IBabsError as e:
+        raise BronNietGereed(f"ibabs ({sitename}): {e}") from e
 
 
 # --------------------------------------------------------------------------------------
