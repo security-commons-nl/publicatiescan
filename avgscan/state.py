@@ -32,7 +32,9 @@ class State:
                 local_path TEXT,
                 ext TEXT,
                 status TEXT DEFAULT 'todo',    -- todo | done | error | skipped
-                note TEXT
+                note TEXT,
+                titel TEXT,                    -- documenttitel (bv. de bekendmaking-titel)
+                herkomst TEXT                  -- bron/gemeente (dt.creator bij de SRU-API)
             );
             CREATE INDEX IF NOT EXISTS idx_files_sha ON files(sha256);
             CREATE TABLE IF NOT EXISTS findings (
@@ -49,6 +51,12 @@ class State:
             );
             """
         )
+        # Migratie: bestaande databases (van vóór 23-07-2026) misten titel/herkomst.
+        # Voeg ze toe zodat een lopende/hervatte scan niet stukloopt.
+        bestaand = {r[1] for r in self.conn.execute("PRAGMA table_info(files)")}
+        for kol in ("titel", "herkomst"):
+            if kol not in bestaand:
+                self.conn.execute(f"ALTER TABLE files ADD COLUMN {kol} TEXT")
         self.conn.commit()
 
     # --- pages ---
@@ -78,9 +86,10 @@ class State:
         ).fetchone()[0]
 
     # --- files ---
-    def add_file(self, url, ext, depth=0):
+    def add_file(self, url, ext, depth=0, titel=None, herkomst=None):
         self.conn.execute(
-            "INSERT OR IGNORE INTO files(url, ext) VALUES (?, ?)", (url, ext)
+            "INSERT OR IGNORE INTO files(url, ext, titel, herkomst) VALUES (?, ?, ?, ?)",
+            (url, ext, titel, herkomst)
         )
 
     def next_file(self):
@@ -139,9 +148,15 @@ class State:
         self.conn.commit()
 
     def all_findings(self):
+        """Bevindingen + (waar bekend) de gemeente/titel van het bijbehorende document.
+
+        LEFT JOIN op files: een tekst-bron zonder files-rij levert simpelweg NULL voor
+        herkomst/titel. De rij is dus 10 velden: de 8 basisvelden + herkomst + titel.
+        """
         cur = self.conn.execute(
-            "SELECT url, local_path, soort, ernst, waarde_masked, locatie, "
-            "context, opmerking FROM findings"
+            "SELECT f.url, f.local_path, f.soort, f.ernst, f.waarde_masked, f.locatie, "
+            "f.context, f.opmerking, d.herkomst, d.titel "
+            "FROM findings f LEFT JOIN files d ON d.url = f.url"
         )
         return cur.fetchall()
 

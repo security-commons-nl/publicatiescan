@@ -249,6 +249,13 @@ Je krijgt `rapport.html` (printbaar) en `rapport.xlsx` in je output-map, gesorte
 ernst. **Alle gevonden waarden zijn gemaskeerd** — ook de andere persoonsgegevens die
 toevallig in hetzelfde tekstfragment stonden. Het rapport is dus zelf geen datalek.
 
+Bij een bekendmakingen-scan (`--sru` of een `sru`-bron) krijgt elke bevinding automatisch
+drie extra kolommen: **Gemeente**, **Onderwerp** (de titel van de bekendmaking) en
+**Vergunning** (het afgeleide type, bijvoorbeeld Omgevingsvergunning). Zo kun je een
+bevinding meteen naar het juiste team routeren en per gemeente filteren. De HTML toont
+alleen Kritiek en Hoog als rijen (de vermoedelijke lekken); Middel en Laag staan
+samengevat, met de volledige lijst in het Excel-bestand.
+
 | Ernst | Wat |
 |---|---|
 | **Kritiek** | BSN (elfproef geldig) · paspoort-/rijbewijsnummer nabij een ID-term |

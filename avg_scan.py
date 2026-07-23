@@ -80,9 +80,9 @@ def sru_phase(cfg, crawler, st, creators, max_records, since, until=None):
             items = list(sru.harvest(crawler.session, creator, max_records, None,
                                       delay=cfg.delay_seconds, timeout=cfg.timeout_seconds))
         n = 0
-        for pdf_url, _titel in items:
+        for pdf_url, titel in items:
             if not st.file_seen(pdf_url):
-                st.add_file(pdf_url, "pdf")
+                st.add_file(pdf_url, "pdf", titel=titel, herkomst=creator)
                 n += 1
         st.conn.commit()
         print(f"  SRU {creator}: {n} nieuwe document-URL('s) in wachtrij "
@@ -143,7 +143,8 @@ def bronnen_phase(cfg, crawler, st):
                         n_txt += 1
                     elif doc.url:                       # download-document
                         if not st.file_seen(doc.url):
-                            st.add_file(doc.url, doc.ext)
+                            st.add_file(doc.url, doc.ext, titel=doc.titel,
+                                        herkomst=doc.bron)
                             n_url += 1
             st.conn.commit()
             print(f"  bron '{naam}' ({typ}): {n_url} download-URL('s), "
@@ -191,7 +192,7 @@ def analyse_phase(cfg, crawler, st):
 
 
 def build_report(cfg, st):
-    rows = st.all_findings()
+    raw = st.all_findings()   # 10-velden: 8 basis + herkomst + titel
     html_path = os.path.join(cfg.output_dir, "rapport.html")
     xlsx_path = os.path.join(cfg.output_dir, "rapport.xlsx")
     # Optionele organisatie-specifieke management-samenvatting: leg een intro.html in de
@@ -202,9 +203,20 @@ def build_report(cfg, st):
     if os.path.exists(intro_path):
         with open(intro_path, "r", encoding="utf-8") as f:
             intro = f.read()
+
+    # Is er gemeente-/titel-metadata (SRU-bron)? Dan de routing-kolommen tonen:
+    # Gemeente · Onderwerp · Vergunning. Zo niet (bv. kale crawl), gewoon 8 kolommen.
+    heeft_meta = any((r[8] or r[9]) for r in raw)
+    if heeft_meta:
+        rows = [tuple(r[:8]) + (r[8] or "", (r[9] or "")[:90], report.vergunning_type(r[9]))
+                for r in raw]
+        extra = ["Gemeente", "Onderwerp", "Vergunning"]
+    else:
+        rows = [tuple(r[:8]) for r in raw]
+        extra = None
     report.write_html(rows, html_path, st.count_files_total(), st.count_pages_done(),
-                      intro_html=intro)
-    report.write_excel(rows, xlsx_path)
+                      intro_html=intro, extra_headers=extra)
+    report.write_excel(rows, xlsx_path, extra_headers=extra)
     return html_path, xlsx_path, len(rows)
 
 

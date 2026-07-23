@@ -10,6 +10,28 @@ from .detect import SEVERITY_ORDER
 
 _ERNST_KLEUR = {"Kritiek": "#c8102e", "Hoog": "#c05600", "Middel": "#8a6d00", "Laag": "#5a5a5a"}
 
+# Vergunning-/documenttype afgeleid uit de bekendmaking-titel, zodat een bevinding naar
+# het juiste team te routeren is. Eerste match wint; volgorde = specifiek vóór generiek.
+_VERGUNNING = [
+    ("omgevingsvergunning", "Omgevingsvergunning"), ("kapvergunning", "Kapvergunning"),
+    ("kappen", "Kapvergunning"), ("evenement", "Evenementenvergunning"),
+    ("exploitatie", "Exploitatievergunning"), ("standplaats", "Standplaatsvergunning"),
+    ("ligplaats", "Ligplaatsvergunning"), ("gehandicaptenparkeer", "Gehandicaptenparkeerplaats"),
+    ("drank", "Drank/horeca"), ("horeca", "Drank/horeca"), ("uitweg", "Uitweg/inrit"),
+    ("inrit", "Uitweg/inrit"), ("sloop", "Sloopmelding"), ("verkeersbesluit", "Verkeersbesluit"),
+    ("verkeer", "Verkeer"), ("bestemmingsplan", "Bestemmingsplan"), ("subsidie", "Subsidie"),
+    ("melding", "Melding"), ("vergunning", "Vergunning (overig)"),
+]
+
+
+def vergunning_type(titel: str) -> str:
+    """Leid het vergunning-/documenttype af uit een titel; '' als niets herkend."""
+    low = (titel or "").lower()
+    for kw, label in _VERGUNNING:
+        if kw in low:
+            return label
+    return ""
+
 
 def _sorted(rows):
     # rows: (url, local_path, soort, ernst, waarde_masked, locatie, context, opmerking)

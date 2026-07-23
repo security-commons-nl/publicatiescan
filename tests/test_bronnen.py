@@ -188,6 +188,36 @@ def test_mijnpublicaties_slaat_pagina_nul_over():
     assert not any("?p=0" in u for u in s.gezien)
 
 
+# --- files: titel + herkomst (gemeente) voor de routing-kolommen ---
+def test_add_file_bewaart_titel_en_herkomst():
+    d = tempfile.mkdtemp()
+    st = State(os.path.join(d, "t.db"))
+    st.add_file("http://x/gmb-2024-1.pdf", "pdf",
+                titel="Verleende omgevingsvergunning, dakkapel", herkomst="Leiden")
+    st.add_findings("http://x/gmb-2024-1.pdf", "/tmp/a.pdf", _dummy_findings())
+    rijen = st.all_findings()
+    assert len(rijen) == 1
+    assert len(rijen[0]) == 10                     # 8 basis + herkomst + titel
+    assert rijen[0][8] == "Leiden"
+    assert "omgevingsvergunning" in rijen[0][9]
+    st.close()
+
+
+def test_all_findings_zonder_files_rij_geeft_none_meta():
+    # Een tekst-bron (geen files-rij) mag geen crash geven: herkomst/titel = None.
+    d = tempfile.mkdtemp()
+    st = State(os.path.join(d, "t.db"))
+    st.add_findings("ori:doc-1", None, _dummy_findings())
+    rij = st.all_findings()[0]
+    assert rij[8] is None and rij[9] is None
+    st.close()
+
+
+def _dummy_findings():
+    from avgscan.detect import Finding, KRITIEK
+    return [Finding("BSN", KRITIEK, "111222333", "pagina 1", "ctx", "opm")]
+
+
 # --- resume-tracking voor tekst-documenten ---
 def test_text_resume_slaat_al_verwerkte_over():
     d = tempfile.mkdtemp()
