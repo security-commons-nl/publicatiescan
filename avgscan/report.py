@@ -144,7 +144,15 @@ def write_html(rows, out_path, scanned_files, scanned_pages, intro_html=None, ex
         f.write(doc)
 
 
-_STUURTEKENS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+# Alles wat XML 1.0 NIET toestaat. Bewust een negatieve klasse (houd alleen geldige
+# tekens over) in plaats van een opsomming van verboden tekens: dat dekt behalve de
+# C0-stuurtekens ook surrogates (\ud800-\udfff) en noncharacters (\ufffe, \uffff), die
+# uit PDF's met een kapotte tekstcodering komen. Die laatste twee categorieën lieten de
+# xlsx-export klappen aan het eind van een uur analyseren, terwijl de HTML al geschreven
+# was — de bevindingen waren er dus wel, maar het Excel-bestand niet.
+# Geldig per XML 1.0: #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
+_STUURTEKENS = re.compile(
+    r"[^\x09\x0a\x0d\x20-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]")
 
 
 def _excel_veilig(v):
