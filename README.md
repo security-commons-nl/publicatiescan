@@ -344,6 +344,41 @@ avgscan/
   state.py             SQLite-status (hervatten + dedup + findings)
 ```
 
+## Gedeelde PII-fixture
+
+De detectiekern van publicatiescan (`avgscan/detect.py`) overlapt met die van
+[anonimizer-local](https://github.com/security-commons-nl/anonimizer-local) en
+[anonimizer-browser](https://github.com/security-commons-nl/anonimizer-browser): BSN met
+elfproef, IBAN, e-mail, postcode en telefoon. Om de drie implementaties aantoonbaar gelijk
+te houden draait in elke repo dezelfde fixture met testgevallen:
+
+| Repo | Rol | Bestand |
+|------|-----|---------|
+| anonimizer-local | **canoniek** (bron van waarheid) | `tests/fixtures/pii-patronen.json` |
+| anonimizer-browser | kopie + hash | `src/lib/fixtures/pii-patronen.json` + `.sha256` |
+| publicatiescan | kopie + hash | `tests/fixtures/pii-patronen.json` + `.sha256` |
+
+`tests/test_fixture_gedeeld.py` haalt elk geval door `scan_text` en controleert daarnaast
+dat de lokale kopie byte-identiek is aan de vastgelegde sha256. Categorieen die
+publicatiescan niet kent (KVK, FG-nummer, IPv4) staan in `NIET_ONDERSTEUND` en worden
+overgeslagen. Gevallen waarin publicatiescan bewust anders oordeelt (bijvoorbeeld: een
+kale postcode zonder huisnummer is hier geen NAW-gegeven) staan in `BEKENDE_AFWIJKINGEN`
+met de reden; de fixture zelf wordt niet versoepeld.
+
+**Een geval toevoegen of wijzigen:**
+
+1. Bewerk de canonieke fixture in `anonimizer-local/tests/fixtures/pii-patronen.json` en
+   draai daar `pytest tests/`.
+2. Kopieer het bestand ongewijzigd naar `publicatiescan/tests/fixtures/` en
+   `anonimizer-browser/src/lib/fixtures/`.
+3. Werk in beide kopie-repo's de hash bij (vanuit de map met de kopie):
+   `sha256sum pii-patronen.json > pii-patronen.sha256`.
+4. Draai de suites in alle drie de repo's. Haalt een implementatie de norm niet, leg dat
+   dan vast in `BEKENDE_AFWIJKINGEN` van die repo.
+
+Gebruik in de fixture uitsluitend fictieve gegevens: testnummers die de elfproef of
+mod-97 halen maar niet zijn uitgegeven, voorbeelddomeinen en verzonnen plaatsen.
+
 ## Licentie
 
 [EUPL-1.2](LICENSE) — Europese open-sourcelicentie, dezelfde als de rest van

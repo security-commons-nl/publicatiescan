@@ -1,0 +1,622 @@
+{
+  "_over": "Canonieke PII-testgevallen voor security-commons-nl. Bron van waarheid: anonimizer-local/tests/fixtures/pii-patronen.json. Kopieen in anonimizer-browser (src/lib/fixtures) en publicatiescan (tests/fixtures) worden met een sha256 bewaakt. Alle gegevens zijn fictief: testnummers, voorbeelddomeinen, verzonnen plaatsen. 'verwacht' is de lijst gevonden waarden zoals ze letterlijk in 'tekst' staan; vergelijking gebeurt na het weghalen van spaties en koppeltekens.",
+  "versie": 1,
+  "gevallen": [
+    {
+      "id": "bsn-01",
+      "categorie": "bsn",
+      "tekst": "BSN: 111222333",
+      "verwacht": [
+        "111222333"
+      ],
+      "toelichting": "Testnummer dat de elfproef haalt, met label."
+    },
+    {
+      "id": "bsn-02",
+      "categorie": "bsn",
+      "tekst": "Burgerservicenummer: 123456782 van aanvrager",
+      "verwacht": [
+        "123456782"
+      ],
+      "toelichting": "Tweede elfproef-geldig testnummer, voluit gelabeld."
+    },
+    {
+      "id": "bsn-03",
+      "categorie": "bsn",
+      "tekst": "Aanvrager 111222333 woont in Duinstad",
+      "verwacht": [
+        "111222333"
+      ],
+      "toelichting": "Los BSN zonder label moet ook gevonden worden."
+    },
+    {
+      "id": "bsn-04",
+      "categorie": "bsn",
+      "tekst": "Zaaknummer 111222334 behandeld",
+      "verwacht": [],
+      "toelichting": "Een cijfer verschil met bsn-01: elfproef faalt, geen BSN."
+    },
+    {
+      "id": "bsn-05",
+      "categorie": "bsn",
+      "tekst": "Pagina 100200300 van het dossier",
+      "verwacht": [],
+      "toelichting": "Negen cijfers die de elfproef niet halen."
+    },
+    {
+      "id": "bsn-06",
+      "categorie": "bsn",
+      "tekst": "Nummer 123456789 is geen BSN",
+      "verwacht": [],
+      "toelichting": "Oplopende reeks, faalt de elfproef."
+    },
+    {
+      "id": "bsn-07",
+      "categorie": "bsn",
+      "tekst": "Reeks 111111111 faalt de elfproef",
+      "verwacht": [],
+      "toelichting": "Herhaald cijfer, faalt de elfproef."
+    },
+    {
+      "id": "bsn-08",
+      "categorie": "bsn",
+      "tekst": "Reeks 000000000 is uitgesloten",
+      "verwacht": [],
+      "toelichting": "Alleen nullen is per definitie geen BSN, ook al klopt de rekensom."
+    },
+    {
+      "id": "bsn-09",
+      "categorie": "bsn",
+      "tekst": "BSN 111 222 333 met spaties",
+      "verwacht": [
+        "111 222 333"
+      ],
+      "toelichting": "Gespreid geschreven BSN: dezelfde negen cijfers, dus een treffer."
+    },
+    {
+      "id": "bsn-10",
+      "categorie": "bsn",
+      "tekst": "Nummer 1234567890123 is te lang",
+      "verwacht": [],
+      "toelichting": "Dertien cijfers: geen BSN en geen telefoonnummer."
+    },
+    {
+      "id": "iban-01",
+      "categorie": "iban",
+      "tekst": "Rekening NL91ABNA0417164300 graag",
+      "verwacht": [
+        "NL91ABNA0417164300"
+      ],
+      "toelichting": "Testrekeningnummer zonder spaties, mod-97 klopt."
+    },
+    {
+      "id": "iban-02",
+      "categorie": "iban",
+      "tekst": "Stort op NL91 ABNA 0417 1643 00",
+      "verwacht": [
+        "NL91 ABNA 0417 1643 00"
+      ],
+      "toelichting": "Zelfde nummer in groepjes van vier; de cijferstaart mag niet apart als telefoon gelden."
+    },
+    {
+      "id": "iban-03",
+      "categorie": "iban",
+      "tekst": "Terugbetaling op NL02ABNA0123456789 graag",
+      "verwacht": [
+        "NL02ABNA0123456789"
+      ],
+      "toelichting": "Tweede testrekeningnummer, mod-97 klopt."
+    },
+    {
+      "id": "iban-04",
+      "categorie": "iban",
+      "tekst": "Rekening NL03ABNA0123456789 klopt niet",
+      "verwacht": [],
+      "toelichting": "Verkeerd controlegetal (03 in plaats van 02): mod-97 faalt, geen IBAN."
+    },
+    {
+      "id": "iban-05",
+      "categorie": "iban",
+      "tekst": "Rekening DE91ABNA0417164300 is buitenlands",
+      "verwacht": [],
+      "toelichting": "Alleen NL-IBAN's vallen onder de detectie."
+    },
+    {
+      "id": "email-01",
+      "categorie": "email",
+      "tekst": "Mail: jan@voorbeeld.nl.",
+      "verwacht": [
+        "jan@voorbeeld.nl"
+      ],
+      "toelichting": "Basisgeval; de punt achter het adres hoort er niet bij."
+    },
+    {
+      "id": "email-02",
+      "categorie": "email",
+      "tekst": "a@b.nl en c.d@e-f.co.uk",
+      "verwacht": [
+        "a@b.nl",
+        "c.d@e-f.co.uk"
+      ],
+      "toelichting": "Meerdere adressen, met punt en koppelteken."
+    },
+    {
+      "id": "email-03",
+      "categorie": "email",
+      "tekst": "Info@Duinstad.nl",
+      "verwacht": [
+        "Info@Duinstad.nl"
+      ],
+      "toelichting": "Hoofdletters blijven staan."
+    },
+    {
+      "id": "email-04",
+      "categorie": "email",
+      "tekst": "voorbeeld.nl is geen email",
+      "verwacht": [],
+      "toelichting": "Domeinnaam zonder apenstaart."
+    },
+    {
+      "id": "email-05",
+      "categorie": "email",
+      "tekst": "Nieuwsbrief: piet+nieuwsbrief@voorbeeld.nl",
+      "verwacht": [
+        "piet+nieuwsbrief@voorbeeld.nl"
+      ],
+      "toelichting": "Plus-teken in het lokale deel."
+    },
+    {
+      "id": "email-06",
+      "categorie": "email",
+      "tekst": "Mail naar j.tester@duinstad.nl of inwoner@voorbeeld.nl",
+      "verwacht": [
+        "j.tester@duinstad.nl",
+        "inwoner@voorbeeld.nl"
+      ],
+      "toelichting": "Werkadres en privéadres worden allebei gevonden; weging is per implementatie."
+    },
+    {
+      "id": "email-07",
+      "categorie": "email",
+      "tekst": "post@team.duinstad.nl",
+      "verwacht": [
+        "post@team.duinstad.nl"
+      ],
+      "toelichting": "Subdomein."
+    },
+    {
+      "id": "email-08",
+      "categorie": "email",
+      "tekst": "a@x.nl en nog eens a@x.nl",
+      "verwacht": [
+        "a@x.nl"
+      ],
+      "toelichting": "Hetzelfde adres twee keer telt als een waarde."
+    },
+    {
+      "id": "postcode-01",
+      "categorie": "postcode",
+      "tekst": "Adres: Hoofdstraat 12, 2514 JS Duinstad",
+      "verwacht": [
+        "2514 JS"
+      ],
+      "toelichting": "Postcode met spatie, huisnummer ervoor."
+    },
+    {
+      "id": "postcode-02",
+      "categorie": "postcode",
+      "tekst": "Stadhuisplein 1, 2311EG Duinstad",
+      "verwacht": [
+        "2311EG"
+      ],
+      "toelichting": "Postcode zonder spatie, huisnummer ervoor."
+    },
+    {
+      "id": "postcode-03",
+      "categorie": "postcode",
+      "tekst": "Adres: 2311 GH Duinstad",
+      "verwacht": [
+        "2311 GH"
+      ],
+      "toelichting": "Postcode met spatie, zonder huisnummer."
+    },
+    {
+      "id": "postcode-04",
+      "categorie": "postcode",
+      "tekst": "2514JS",
+      "verwacht": [
+        "2514JS"
+      ],
+      "toelichting": "Kale postcode zonder spatie."
+    },
+    {
+      "id": "postcode-05",
+      "categorie": "postcode",
+      "tekst": "2514 js",
+      "verwacht": [],
+      "toelichting": "Kleine letters: geen postcode."
+    },
+    {
+      "id": "postcode-06",
+      "categorie": "postcode",
+      "tekst": "0514 AB",
+      "verwacht": [],
+      "toelichting": "Begint met 0: geen Nederlandse postcode."
+    },
+    {
+      "id": "postcode-07",
+      "categorie": "postcode",
+      "tekst": "code 2311 gh",
+      "verwacht": [],
+      "toelichting": "Kleine letters in lopende tekst."
+    },
+    {
+      "id": "postcode-08",
+      "categorie": "postcode",
+      "tekst": "woonachtig te 2352 BZ Duinstad, nr 14",
+      "verwacht": [
+        "2352 BZ"
+      ],
+      "toelichting": "Huisnummer achter de postcode."
+    },
+    {
+      "id": "postcode-09",
+      "categorie": "postcode",
+      "tekst": "Het perceel Hoofdstraat 12a, 2351 AB Duinstad",
+      "verwacht": [
+        "2351 AB"
+      ],
+      "toelichting": "Huisnummer met toevoeging."
+    },
+    {
+      "id": "postcode-10",
+      "categorie": "postcode",
+      "tekst": "De gemeente ligt in gebied 2333 CT",
+      "verwacht": [
+        "2333 CT"
+      ],
+      "toelichting": "Postcode zonder adrescontext blijft een postcode."
+    },
+    {
+      "id": "postcode-11",
+      "categorie": "postcode",
+      "tekst": "Bezwaar sturen naar Postbus 9100, 2300 PC Duinstad",
+      "verwacht": [
+        "2300 PC"
+      ],
+      "toelichting": "Postbusadres: wel een postcode, weging per implementatie."
+    },
+    {
+      "id": "postcode-12",
+      "categorie": "postcode",
+      "tekst": "Wmo 2015 en Jeugdwet",
+      "verwacht": [],
+      "toelichting": "Jaartal plus kort woord lijkt op een postcode, is het niet."
+    },
+    {
+      "id": "postcode-13",
+      "categorie": "postcode",
+      "tekst": "van donderdag 19 maart 2026 tot en met donderdag",
+      "verwacht": [],
+      "toelichting": "Jaartal plus 'tot'."
+    },
+    {
+      "id": "postcode-14",
+      "categorie": "postcode",
+      "tekst": "vond plaats op vrijdag 1 maart 1934 in Duinstad",
+      "verwacht": [],
+      "toelichting": "Jaartal plus 'in'."
+    },
+    {
+      "id": "postcode-15",
+      "categorie": "postcode",
+      "tekst": "Uitvoeringsregeling Wmo 2015 artikel 8a, lid 2",
+      "verwacht": [],
+      "toelichting": "Wetsverwijzing met jaartal."
+    },
+    {
+      "id": "postcode-16",
+      "categorie": "postcode",
+      "tekst": "in de winters van 2024-2025 en 2025-2026 gewerkt",
+      "verwacht": [],
+      "toelichting": "Jaartallen met koppelteken."
+    },
+    {
+      "id": "postcode-17",
+      "categorie": "postcode",
+      "tekst": "ECLI:NL:ABCD:2015:2015 en ECLI:NL:ABCD:2017:1388",
+      "verwacht": [],
+      "toelichting": "Fictieve uitspraakverwijzing met jaartallen."
+    },
+    {
+      "id": "postcode-18",
+      "categorie": "postcode",
+      "tekst": "niet voor 1 januari 2026 is bekostigd",
+      "verwacht": [],
+      "toelichting": "Datum plus 'is'."
+    },
+    {
+      "id": "postcode-19",
+      "categorie": "postcode",
+      "tekst": "De raad besluit in 2026 de verordening vast te stellen",
+      "verwacht": [],
+      "toelichting": "Jaartal plus 'de'."
+    },
+    {
+      "id": "tel-01",
+      "categorie": "telefoon",
+      "tekst": "Bel 06-12345678 voor vragen",
+      "verwacht": [
+        "06-12345678"
+      ],
+      "toelichting": "06-nummer met koppelteken."
+    },
+    {
+      "id": "tel-02",
+      "categorie": "telefoon",
+      "tekst": "Bel 0612345678 voor vragen",
+      "verwacht": [
+        "0612345678"
+      ],
+      "toelichting": "06-nummer aaneengeschreven."
+    },
+    {
+      "id": "tel-03",
+      "categorie": "telefoon",
+      "tekst": "Bel 06 12345678 voor vragen",
+      "verwacht": [
+        "06 12345678"
+      ],
+      "toelichting": "06-nummer met een spatie; de laatste acht cijfers zijn geen BSN."
+    },
+    {
+      "id": "tel-04",
+      "categorie": "telefoon",
+      "tekst": "Tel: +31 6 12345678",
+      "verwacht": [
+        "+31 6 12345678"
+      ],
+      "toelichting": "Internationale schrijfwijze met spaties."
+    },
+    {
+      "id": "tel-05",
+      "categorie": "telefoon",
+      "tekst": "Tel: +31612345678",
+      "verwacht": [
+        "+31612345678"
+      ],
+      "toelichting": "Internationale schrijfwijze aaneengeschreven."
+    },
+    {
+      "id": "tel-06",
+      "categorie": "telefoon",
+      "tekst": "Bel 06 12 34 56 78",
+      "verwacht": [
+        "06 12 34 56 78"
+      ],
+      "toelichting": "06-nummer in groepjes van twee."
+    },
+    {
+      "id": "tel-07",
+      "categorie": "telefoon",
+      "tekst": "Tel: +31 (0)20 1234567",
+      "verwacht": [
+        "+31 (0)20 1234567"
+      ],
+      "toelichting": "Landcode met (0)-notatie voor een vast nummer."
+    },
+    {
+      "id": "tel-08",
+      "categorie": "telefoon",
+      "tekst": "070 373 80 11",
+      "verwacht": [
+        "070 373 80 11"
+      ],
+      "toelichting": "Vast nummer in groepjes."
+    },
+    {
+      "id": "tel-09",
+      "categorie": "telefoon",
+      "tekst": "010-1234567",
+      "verwacht": [
+        "010-1234567"
+      ],
+      "toelichting": "Vast nummer met koppelteken."
+    },
+    {
+      "id": "tel-10",
+      "categorie": "telefoon",
+      "tekst": "0205551234",
+      "verwacht": [
+        "0205551234"
+      ],
+      "toelichting": "Vast nummer aaneengeschreven."
+    },
+    {
+      "id": "tel-11",
+      "categorie": "telefoon",
+      "tekst": "27-12-2022",
+      "verwacht": [],
+      "toelichting": "Datum, geen telefoonnummer."
+    },
+    {
+      "id": "tel-12",
+      "categorie": "telefoon",
+      "tekst": "Versie 1.0 0.5 release",
+      "verwacht": [],
+      "toelichting": "Versienummers, geen telefoonnummer."
+    },
+    {
+      "id": "tel-13",
+      "categorie": "telefoon",
+      "tekst": "2021-2024",
+      "verwacht": [],
+      "toelichting": "Periode, geen telefoonnummer."
+    },
+    {
+      "id": "kvk-01",
+      "categorie": "kvk",
+      "tekst": "KVK 12345678",
+      "verwacht": [
+        "KVK 12345678"
+      ],
+      "toelichting": "Acht cijfers met KVK-label; het label hoort bij de treffer."
+    },
+    {
+      "id": "kvk-02",
+      "categorie": "kvk",
+      "tekst": "KVK  12345678",
+      "verwacht": [
+        "KVK  12345678"
+      ],
+      "toelichting": "Dubbele spatie tussen label en nummer."
+    },
+    {
+      "id": "kvk-03",
+      "categorie": "kvk",
+      "tekst": "KVK: 12345678",
+      "verwacht": [
+        "KVK: 12345678"
+      ],
+      "toelichting": "Dubbelepunt na het label."
+    },
+    {
+      "id": "kvk-04",
+      "categorie": "kvk",
+      "tekst": "kvk 12345678",
+      "verwacht": [
+        "kvk 12345678"
+      ],
+      "toelichting": "Label in kleine letters."
+    },
+    {
+      "id": "kvk-05",
+      "categorie": "kvk",
+      "tekst": "KVK 1234567",
+      "verwacht": [],
+      "toelichting": "Zeven cijfers: geen KVK-nummer."
+    },
+    {
+      "id": "kvk-06",
+      "categorie": "kvk",
+      "tekst": "KVK 123456789",
+      "verwacht": [],
+      "toelichting": "Negen cijfers: geen KVK-nummer, en 123456789 faalt de elfproef."
+    },
+    {
+      "id": "fg-01",
+      "categorie": "fg",
+      "tekst": "FG 000999 Gemeente Duinstad",
+      "verwacht": [
+        "FG 000999"
+      ],
+      "toelichting": "FG-registratienummer van zes cijfers."
+    },
+    {
+      "id": "fg-02",
+      "categorie": "fg",
+      "tekst": "Aangemeld als FG 123456",
+      "verwacht": [
+        "FG 123456"
+      ],
+      "toelichting": "FG-nummer in lopende tekst."
+    },
+    {
+      "id": "fg-03",
+      "categorie": "fg",
+      "tekst": "De FG is verantwoordelijk",
+      "verwacht": [],
+      "toelichting": "FG als rolaanduiding zonder nummer."
+    },
+    {
+      "id": "ip-01",
+      "categorie": "ipv4",
+      "tekst": "Server 192.168.1.1",
+      "verwacht": [
+        "192.168.1.1"
+      ],
+      "toelichting": "Privé-adres, minstens een octet boven 100."
+    },
+    {
+      "id": "ip-02",
+      "categorie": "ipv4",
+      "tekst": "IP 10.0.100.5",
+      "verwacht": [
+        "10.0.100.5"
+      ],
+      "toelichting": "Derde octet boven 100."
+    },
+    {
+      "id": "ip-03",
+      "categorie": "ipv4",
+      "tekst": "255.255.255.0",
+      "verwacht": [
+        "255.255.255.0"
+      ],
+      "toelichting": "Subnetmasker telt als IP-notatie."
+    },
+    {
+      "id": "ip-04",
+      "categorie": "ipv4",
+      "tekst": "Hoofdstuk 14.2.7.1",
+      "verwacht": [],
+      "toelichting": "Hoofdstuknummer, geen IP-adres."
+    },
+    {
+      "id": "ip-05",
+      "categorie": "ipv4",
+      "tekst": "Versie 1.2.3.4",
+      "verwacht": [],
+      "toelichting": "Versienummer, geen IP-adres."
+    },
+    {
+      "id": "ip-06",
+      "categorie": "ipv4",
+      "tekst": "sectie 1.1.1.1",
+      "verwacht": [],
+      "toelichting": "Sectienummer, geen IP-adres."
+    },
+    {
+      "id": "ip-07",
+      "categorie": "ipv4",
+      "tekst": "norm 10.1.2.3",
+      "verwacht": [],
+      "toelichting": "Normverwijzing, geen IP-adres."
+    },
+    {
+      "id": "ruis-01",
+      "categorie": "ruis",
+      "tekst": "Versie 1.1 Definitief 4 maart 2025",
+      "verwacht": [],
+      "toelichting": "Versie en datum."
+    },
+    {
+      "id": "ruis-02",
+      "categorie": "ruis",
+      "tekst": "Hoofdstuk 2.3 Beheer van informatie",
+      "verwacht": [],
+      "toelichting": "Hoofdstuknummer."
+    },
+    {
+      "id": "ruis-03",
+      "categorie": "ruis",
+      "tekst": "De CISO is verantwoordelijk voor informatiebeveiliging.",
+      "verwacht": [],
+      "toelichting": "Rolaanduiding."
+    },
+    {
+      "id": "ruis-04",
+      "categorie": "ruis",
+      "tekst": "Pagina 3 van 12",
+      "verwacht": [],
+      "toelichting": "Paginanummering."
+    },
+    {
+      "id": "ruis-05",
+      "categorie": "ruis",
+      "tekst": "Artikel 33a lid 7",
+      "verwacht": [],
+      "toelichting": "Artikelverwijzing."
+    }
+  ]
+}
