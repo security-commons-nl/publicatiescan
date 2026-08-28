@@ -234,8 +234,8 @@ def _notubiz(bron, session, cfg):
 _DOC_EXT = (".pdf", ".docx", ".doc", ".xlsx", ".xls", ".xlsm", ".pptx", ".ppt")
 # Fallback-modulelijst (gebruikt als het menu-endpoint niet te lezen is). Postin = ingekomen
 # stukken van inwoners, empirisch het grootste risico; councildocument/bestuursdocument/
-# beleidsdocument = collegeberichten/raadsinformatiebrieven/vastgestelde verslagen (gevonden
-# 15-07-2026: die miste de oude hardcoded lijst bij Oegstgeest/Leiderdorp/Zoeterwoude). Niet
+# beleidsdocument = collegeberichten/raadsinformatiebrieven/vastgestelde verslagen (de oude
+# hardcoded lijst miste die bij meerdere kleinere gemeenten). Niet
 # elke gemeente heeft alle modules aan; een module die 404/geen lijst geeft, wordt stil
 # overgeslagen (terecht: 'niet aanwezig', niet 'niets gevonden').
 _QG_MODULES = ["postin", "councildocument", "bestuursdocument", "beleidsdocument", "dossier",

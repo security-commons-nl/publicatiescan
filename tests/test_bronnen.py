@@ -79,7 +79,7 @@ class _FakeSession:
 
 
 def test_qg_modules_uit_menu_lowercase_en_skip():
-    # Menu zoals Zoeterwoude het teruggeeft: CamelCase names + view-only entries.
+    # Menu zoals een kleine gemeente het teruggeeft: CamelCase names + view-only entries.
     menu = [
         {"label": "Agenda's", "entries": [
             {"name": "agenda", "label": "Vergaderingen"},

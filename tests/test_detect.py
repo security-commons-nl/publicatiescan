@@ -87,8 +87,8 @@ def test_jaartal_is_geen_postcode(tekst):
 @pytest.mark.parametrize("tekst,verwacht", [
     ("Bezoekadres: Bargelaan 190, 2333 CT Leiden", "2333 CT"),
     ("Stadhuisplein 1, 2311EG Leiden", "2311EG"),
-    ("woonachtig te 2352 BZ Leiderdorp, nr 14", "2352 BZ"),
-    ("Het perceel Hoofdstraat 12a, 2351 AB Leiderdorp", "2351 AB"),
+    ("woonachtig te 2352 BZ Duinstad, nr 14", "2352 BZ"),
+    ("Het perceel Hoofdstraat 12a, 2351 AB Duinstad", "2351 AB"),
 ])
 def test_echt_adres_wordt_gevonden(tekst, verwacht):
     assert verwacht in waarden(tekst, "naw", "NAW")
@@ -115,7 +115,7 @@ def test_postbus_is_geen_woonadres(tekst):
 
 
 def test_woonadres_blijft_middel_naast_een_postbus():
-    tekst = ("Het perceel Hoofdstraat 12, 2351 AB Leiderdorp. "
+    tekst = ("Het perceel Hoofdstraat 12, 2351 AB Duinstad. "
              "Bezwaar: Postbus 9100, 2300 PC Leiden.")
     per_waarde = {f.waarde: f.ernst for f in soorten(tekst, "naw") if f.soort.startswith("NAW")}
     assert per_waarde["2351 AB"] == MIDDEL      # het echte adres blijft staan
