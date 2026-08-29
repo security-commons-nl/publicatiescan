@@ -1,0 +1,16 @@
+name: Statuut
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"   # wekelijks: vangt een statuswijziging in de projectentabel op
+
+permissions:
+  contents: read
+
+jobs:
+  statuut:
+    uses: security-commons-nl/.github/.github/workflows/repo-compliance.yml@main

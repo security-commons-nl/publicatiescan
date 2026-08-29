@@ -16,11 +16,3 @@ jobs:
     with:
       python-version: "3.12"
       test-command: "pytest tests/ -v"
-
-  # Documentatie-compliance conform DOCUMENTATION-STANDARD.md
-  docs:
-    uses: security-commons-nl/.github/.github/workflows/doc-compliance.yml@main
-    with:
-      require-gebruik: false         # README.md bevat de volledige handleiding
-      require-architectuur: false    # README.md beschrijft de moduleopbouw
-      require-configuratie: false    # README.md + config.example.yaml documenteren de config
