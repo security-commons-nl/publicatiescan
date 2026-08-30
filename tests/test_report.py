@@ -84,3 +84,80 @@ def test_excel_houdt_alles():
     report.write_excel(_RIJEN, pad)
     ws = openpyxl.load_workbook(pad).active
     assert ws.max_row == 5                            # kop + 4 bevindingen
+
+
+# ----------------------------------------------------------------------------------
+# XML-ongeldige tekens uit de PDF-tekstlaag
+#
+# Aanleiding: een run van 2847 documenten schreef rapport.html goed weg en klapte
+# daarna op wb.save() met "All strings must be XML compatible". _STUURTEKENS dekte de
+# C0-stuurtekens wel, maar niet de surrogates (\ud800-\udfff) en noncharacters
+# (\ufffe, \uffff) die uit PDF's met een kapotte tekstcodering komen. Eén zo'n teken
+# in één bevinding kostte het hele Excel-bestand.
+# ----------------------------------------------------------------------------------
+import pytest
+
+from avgscan.report import _excel_veilig
+
+
+def _rij(context):
+    """Minimale bevinding-rij met `context` als veld uit de tekstlaag."""
+    return ("https://x/1", "/tmp/a.pdf", "BSN", "Kritiek", "12*****82",
+            "pagina 3", context, "")
+
+
+@pytest.mark.parametrize("teken, naam", [
+    ("\x00", "NULL"),
+    ("\x07", "bell"),
+    ("\x0b", "vertical tab"),
+    ("\x1f", "unit separator"),
+    ("\ud800", "surrogate (laag)"),
+    ("\udfff", "surrogate (hoog)"),
+    ("\ufffe", "noncharacter fffe"),
+    ("\uffff", "noncharacter ffff"),
+])
+def test_xml_ongeldige_tekens_worden_gestript(teken, naam):
+    assert teken not in _excel_veilig(f"abc{teken}def")
+
+
+@pytest.mark.parametrize("tekst", [
+    "Raadsplein: Agenda en raadsstukken",
+    "Kröller-Müller, café, ĳsselmeer",        # accenten en ligaturen
+    "regel1\nregel2\ttab\rretour",             # tab, LF en CR zijn geldig in XML
+    "emoji \U0001F600 buiten de BMP",
+    "",
+])
+def test_geldige_tekst_blijft_ongemoeid(tekst):
+    assert _excel_veilig(tekst) == tekst
+
+
+def test_niet_strings_gaan_ongewijzigd_door():
+    for waarde in (None, 42, 3.14, True):
+        assert _excel_veilig(waarde) is waarde
+
+
+def test_write_excel_met_kapotte_tekstlaag(tmp_path):
+    """Regressietest: deze rijen lieten wb.save() eerder klappen."""
+    import openpyxl
+    rijen = [
+        _rij("kapotte tekstlaag: \ud800 en \ufffe en \uffff"),
+        _rij("NULL\x00 bell\x07 unit\x1f"),
+        _rij("normaal: Kröller-Müller, café, 😀"),
+    ]
+    pad = str(tmp_path / "rapport.xlsx")
+    report.write_excel(rijen, pad)                   # mag geen ValueError geven
+    ws = openpyxl.load_workbook(pad).active
+    assert ws.max_row == len(rijen) + 1
+    teksten = [c.value or "" for c in ws["G"][1:]]
+    assert any("kapotte tekstlaag" in t for t in teksten)   # leesbare inhoud bewaard
+    assert any("Kröller-Müller" in t for t in teksten)
+    assert not any("\ud800" in t or "\ufffe" in t or "\x00" in t for t in teksten)
+
+
+def test_extra_kolommen_worden_ook_geschoond(tmp_path):
+    import openpyxl
+    rijen = [_rij("normaal") + ("Raadsplein \ufffe 2013", "Ingekomen brief", "")]
+    pad = str(tmp_path / "rapport.xlsx")
+    report.write_excel(rijen, pad, extra_headers=["Gemeente", "Onderwerp", "Vergunning"])
+    ws = openpyxl.load_workbook(pad).active
+    assert "\ufffe" not in (ws.cell(row=2, column=9).value or "")
