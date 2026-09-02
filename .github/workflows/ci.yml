@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# Het token van deze workflow mag alleen lezen. Dat is nu ook de standaard van de
+# organisatie, maar expliciet blijft het staan als die standaard ooit verandert.
+permissions:
+  contents: read
+
 jobs:
   # Standaard Python-tests via de herbruikbare workflow in security-commons-nl/.github.
   # Deze suite is geen formaliteit: de detector waardeert ruis af naar Laag, en één
