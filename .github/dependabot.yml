@@ -1,0 +1,32 @@
+version: 2
+
+# Houdt de Actions in de workflows bij; een verplaatste of achterhaalde action is een
+# supply-chain-risico dat je niet ziet tot hij misgaat. Minor en patch gebundeld in een PR.
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    groups:
+      actions:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"
+    labels: ["dependencies", "ci"]
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    groups:
+      pip:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    labels: ["dependencies"]
