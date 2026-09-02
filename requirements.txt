@@ -1,5 +1,5 @@
 # AVG Publicatie Scanner — afhankelijkheden (MVP, alleen open-source)
-requests>=2.31
+requests>=2.34.2
 beautifulsoup4>=4.12
 lxml>=5.0
 PyMuPDF>=1.24        # PDF: tekstlaag + metadata (import: fitz)
