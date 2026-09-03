@@ -1,0 +1,13 @@
+{
+  "repoUrl": "https://github.com/security-commons-nl/publicatiescan",
+  "title": "publicatiescan · Security Commons NL",
+  "description": "Vind persoonsgegevens die per ongeluk in je eigen publicaties staan: NAW en e-mail in PDF, DOCX, XLSX en PPTX, lokaal gedraaid op je eigen bestanden.",
+  "siteTitle": "publicatiescan",
+  "tabs": [
+    {
+      "file": "README.md",
+      "id": "start",
+      "label": "Start"
+    }
+  ]
+}

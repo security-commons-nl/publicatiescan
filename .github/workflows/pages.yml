@@ -1,0 +1,27 @@
+name: Build and deploy Pages
+
+# De leesbare versie van de README, via de gedeelde documentatiebuild van de organisatie. Deze repo
+# heeft zelf geen build: pages-docs.yml checkt security-commons-nl/.github uit en draait de build
+# daaruit op de teksten hier. Wat per repo verschilt, staat in site/config.json.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "*.md"
+      - "site/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  pages:
+    uses: security-commons-nl/.github/.github/workflows/pages-docs.yml@main
